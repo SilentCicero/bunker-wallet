@@ -28,7 +28,7 @@ Users create or restore a browser seed, secure a backup, prepare narrowly suppor
 
 ## Capabilities and Constraints
 
-The hosted alpha is limited to local Anvil and Base Sepolia. Mainnet deployment, signing, and broadcasting are disabled. The first release supports a finite committed sequence and ETH-transfer-only transaction envelopes. Dynamic commitment refill, QR transport, arbitrary contract calls, hardware signing, manual injected signers, funded Safe refunds, and production relaying remain disabled until their security gates are met.
+The hosted alpha is limited to local Anvil and Arbitrum Sepolia. Mainnet deployment, signing, and broadcasting are disabled. The first release supports a finite committed sequence and ETH-transfer-only transaction envelopes. Dynamic commitment refill, QR transport, arbitrary contract calls, hardware signing, manual injected signers, funded Safe refunds, and production relaying remain disabled until their security gates are met.
 
 ## Brand Commitments
 

@@ -3,7 +3,7 @@ import { assertSupportedChain, SecurityPolicyError, ZERO_ADDRESS } from "@bunker
 export const MAX_ENVELOPE_BYTES = 64 * 1024;
 const KEYS = ["version","kind","chainId","safe","safeVersion","guard","guardVersion","manifestId","nonce","to","value","data","operation","safeTxGas","baseGas","gasPrice","gasToken","refundReceiver","currentOwner","nextOwner","nextIndex","merkleProof","safeTxHash","signature","checksum"] as const;
 export type OfflineEnvelope = {
-  version: 1; kind: "bunker-transfer"; chainId: 31337 | 11155111 | 84532; safe: Address; safeVersion: "1.4.1"; guard: Address; guardVersion: 1; manifestId: Hex;
+  version: 1; kind: "bunker-transfer"; chainId: 31337 | 11155111 | 84532 | 421614; safe: Address; safeVersion: "1.4.1"; guard: Address; guardVersion: 1; manifestId: Hex;
   nonce: string; to: Address; value: string; data: "0x"; operation: 1; safeTxGas: string; baseGas: "0"; gasPrice: "0"; gasToken: typeof ZERO_ADDRESS; refundReceiver: typeof ZERO_ADDRESS;
   currentOwner: Address; nextOwner: Address; nextIndex: number; merkleProof: Hex[]; safeTxHash: Hex; signature?: Hex; checksum: Hex;
 };
