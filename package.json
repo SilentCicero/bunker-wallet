@@ -1,0 +1,34 @@
+{
+  "name": "bunker-wallet",
+  "private": true,
+  "version": "0.1.0-alpha.1",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd apps/web dev",
+    "build": "bun run --cwd apps/web build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:e2e": "playwright test",
+    "relayer": "bun apps/relayer/src/index.ts",
+    "dependency:report": "bun scripts/dependency-report.ts",
+    "release:verify": "bun scripts/release-verification.ts"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.4.0",
+    "@scure/bip39": "2.4.0",
+    "solid-js": "1.9.17",
+    "viem": "2.57.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/bun": "1.4.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.3",
+    "vite-plugin-solid": "2.11.14"
+  },
+  "trustedDependencies": []
+}

@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-10-07T20:07:48.942Z",
+  "directProduction": [
+    {
+      "name": "@noble/hashes",
+      "version": "2.4.0"
+    },
+    {
+      "name": "@scure/bip39",
+      "version": "2.4.0"
+    },
+    {
+      "name": "solid-js",
+      "version": "1.9.17"
+    },
+    {
+      "name": "viem",
+      "version": "2.57.3"
+    }
+  ],
+  "directDevelopment": [
+    {
+      "name": "@playwright/test",
+      "version": "1.63.0"
+    },
+    {
+      "name": "@types/bun",
+      "version": "1.4.2"
+    },
+    {
+      "name": "typescript",
+      "version": "5.9.3"
+    },
+    {
+      "name": "vite",
+      "version": "8.3.3"
+    },
+    {
+      "name": "vite-plugin-solid",
+      "version": "2.11.14"
+    }
+  ],
+  "directCount": 4,
+  "lockfileBytes": 31992,
+  "trustedLifecycleDependencies": []
+}

@@ -1,0 +1,3 @@
+const pkg=await Bun.file("package.json").json() as {dependencies:Record<string,string>,devDependencies:Record<string,string>};const lock=await Bun.file("bun.lock").text();const report={generatedAt:new Date().toISOString(),directProduction:Object.entries(pkg.dependencies).map(([name,version])=>({name,version})),directDevelopment:Object.entries(pkg.devDependencies).map(([name,version])=>({name,version})),directCount:Object.keys(pkg.dependencies).length,lockfileBytes:new TextEncoder().encode(lock).length,trustedLifecycleDependencies:[]};await Bun.write("dependency-report.json",JSON.stringify(report,null,2)+"\n");console.log(JSON.stringify(report,null,2));
+
+export {};

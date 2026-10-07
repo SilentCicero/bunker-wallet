@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+packages/contracts/cache/
+packages/contracts/out/
+reports/*.json
+test-results/
+playwright-report/
+.pi-subagents/

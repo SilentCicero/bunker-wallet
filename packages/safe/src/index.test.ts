@@ -1,0 +1,1 @@
+import{expect,test}from"bun:test";import{validateManifest}from"./index";test("rejects mainnet before any RPC use",()=>expect(()=>validateManifest({chainId:1,safeVersion:"1.4.1"} as never)).toThrow("Mainnet"));

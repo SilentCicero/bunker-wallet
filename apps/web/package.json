@@ -1,0 +1,1 @@
+{"name":"@bunker/web","private":true,"version":"0.1.0-alpha.1","type":"module","scripts":{"dev":"vite","build":"vite build","preview":"vite preview"},"dependencies":{"@bunker/core":"workspace:*","@bunker/offline":"workspace:*","@bunker/vault":"workspace:*"}}
