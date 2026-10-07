@@ -36,6 +36,8 @@ test("local preview opens the wallet and rotates without network access", async 
   await page.goto("/");
   await page.getByRole("button", { name: "Try it" }).first().click();
   await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Token" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Wall", exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Recipient")).toHaveValue("vitalik.eth");
   await expect(page.getByLabel("Amount")).toHaveValue("0.001");
   const previousSigner = await page.locator(".signer-steps .current code").innerText();

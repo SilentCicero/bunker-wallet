@@ -21,7 +21,7 @@ sequenceDiagram
 Working today:
 
 - faucet-free local preview by default, plus an optional Ethereum Sepolia flow using the Google Cloud faucet;
-- ETH, ERC-20 and short message actions that atomically rotate to a fresh owner;
+- an ETH-send flow that atomically rotates to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
 - 24-word BIP-39 creation and recovery confirmation;
@@ -50,7 +50,7 @@ Blocked today:
 ```mermaid
 flowchart TB
   PWA[SolidJS PWA] --> D[Ethereum Sepolia demo wallet]
-  D --> A[ETH / ERC-20 / message action]
+  D --> A[ETH send action]
   A --> K[Fund and activate next owner]
   PWA --> V[Encrypted recovery]
   D -. future audited architecture .-> S[Official Safe + rotation guard]

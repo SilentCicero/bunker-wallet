@@ -10,13 +10,13 @@
 - Runtime chain policy accepts only local Anvil `31337` and Ethereum Sepolia `11155111`.
 - Static web UI and loopback-only validation relay with no signing key.
 - Default local preview uses no RPC, faucet, broadcast, persistence, or real assets.
-- Optional Ethereum Sepolia setup uses memory-only keys, a copied-address Google Cloud faucet handoff, demo-wallet deployment, and ETH/ERC-20/message actions.
+- Optional Ethereum Sepolia setup uses memory-only keys, a copied-address Google Cloud faucet handoff, demo-wallet deployment, and ETH sends.
 - Contract compilation and static review enforce atomic action, next-owner funding, and owner activation while preserving the wallet contract address.
 - Recovery-phrase mode derives owners deterministically; quick setup remains memory-only and is unrecoverable after refresh.
 
 ## Disabled
 
-Mainnet; arbitrary contract calls; Safe refunds; modules; guard changes; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses. The demo permits only ETH transfer, ERC-20 `transfer`, and bounded message events.
+Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules; guard changes; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses. The hosted UI exposes ETH sends only; compatibility methods remain in the unaudited demonstration contract.
 
 ## Test status and release blockers
 
