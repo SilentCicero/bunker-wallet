@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @notice Unaudited Arbitrum Sepolia-only demonstration of a stable address with a rotating ECDSA owner.
+/// @notice Unaudited Ethereum Sepolia-only demonstration of a stable address with a rotating ECDSA owner.
 /// @dev This is not Safe and must never hold meaningful funds.
 contract BunkerDemoWallet {
     uint256 public constant NEXT_OWNER_GAS = 0.001 ether;
@@ -18,7 +18,7 @@ contract BunkerDemoWallet {
     event DemoMessage(address indexed wallet, uint64 indexed rotationIndex, string message);
 
     constructor(address initialOwner) payable {
-        if (block.chainid != 421614) revert WrongChain();
+        if (block.chainid != 11155111) revert WrongChain();
         if (initialOwner == address(0)) revert InvalidNextOwner();
         owner = initialOwner;
     }

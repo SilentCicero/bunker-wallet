@@ -10,7 +10,7 @@ interface ISafeView {
     function getModulesPaginated(address start, uint256 pageSize) external view returns (address[] memory array, address next);
 }
 
-/// @notice Unaudited fixed-sequence guard for local/Arbitrum Sepolia testing only.
+/// @notice Unaudited fixed-sequence guard for local/Ethereum Sepolia testing only.
 /// @dev Dynamic refill, upgrades, modules, refunds, and arbitrary calls are intentionally absent.
 contract BunkerRotationGuard is BaseGuard {
     uint256 public constant BATCH_SIZE = 20;
