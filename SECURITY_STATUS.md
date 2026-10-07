@@ -9,7 +9,7 @@
 - 24-word BIP-39 generation and authenticated Argon2id/AES-GCM local vaults.
 - Runtime chain policy accepts only local Anvil `31337` and Sepolia `11155111`.
 - Static web UI and loopback-only validation relay with no signing key.
-- Sepolia-only setup keys, copied-address Alchemy faucet handoff, demo-wallet deployment, and ETH/ERC-20/message actions.
+- Sepolia-only setup keys, copied-address Google Cloud faucet handoff, demo-wallet deployment, and ETH/ERC-20/message actions.
 - Contract compilation and static review enforce atomic action, next-owner funding, and owner activation while preserving the wallet contract address.
 - Recovery-phrase mode derives owners deterministically; quick setup remains memory-only and is unrecoverable after refresh.
 
