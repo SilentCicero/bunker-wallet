@@ -16,7 +16,7 @@ for (const [name, width, height] of views) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try local demo" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try local preview" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Use Ethereum Sepolia" })).toBeVisible();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
@@ -30,12 +30,12 @@ for (const [name, width, height] of views) {
   });
 }
 
-test("local demo creates a wallet and rotates without network funding", async ({ page }) => {
+test("local preview creates a wallet and rotates without network funding", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Try local demo" }).first().click();
-  await expect(page.getByRole("heading", { name: "Your local demo is ready." })).toBeVisible();
+  await page.getByRole("button", { name: "Try local preview" }).first().click();
+  await expect(page.getByRole("heading", { name: "Your local preview is ready." })).toBeVisible();
   await page.getByRole("button", { name: "Create stable wallet" }).click();
-  await expect(page.getByText("Local simulation · not broadcast")).toBeVisible();
+  await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
   await page.getByRole("button", { name: "Wall", exact: true }).click();
   await page.getByPlaceholder("Hello from my rotating wallet").fill("Local rotation demo");
   await page.getByRole("button", { name: "Post + rotate key" }).click();

@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- faucet-free local simulation by default, plus an optional Ethereum Sepolia flow using the Google Cloud faucet;
+- faucet-free local preview by default, plus an optional Ethereum Sepolia flow using the Google Cloud faucet;
 - ETH, ERC-20 and short message actions that atomically rotate to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -60,7 +60,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Try local demo** creates a session-only simulated wallet with no RPC, faucet, broadcast, or persistent keys. **Use Ethereum Sepolia** creates a random key in the current tab and opens the Google Cloud faucet; refresh loses access. Recovery-phrase setup provides deterministic owner recovery for Sepolia, and the stable wallet address must be recorded alongside the phrase.
+**Try local preview** creates a session-only simulated wallet with no RPC, faucet, broadcast, or persistent keys. **Use Ethereum Sepolia** creates a random key in the current tab and opens the Google Cloud faucet; refresh loses access. Recovery-phrase setup provides deterministic owner recovery for Sepolia, and the stable wallet address must be recorded alongside the phrase.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 
