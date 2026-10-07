@@ -1,6 +1,6 @@
 # Bunker Wallet
 
-Bunker Wallet is an **unaudited Sepolia demonstration** of one stable Ethereum contract address whose ECDSA owner advances after every supported action. The hosted demo contract is intentionally smaller than the planned Safe architecture. Mainnet is disabled. Do not use meaningful funds.
+Bunker Wallet is an **unaudited Base Sepolia demonstration** of one stable Ethereum contract address whose ECDSA owner advances after every supported action. The hosted demo contract is intentionally smaller than the planned Safe architecture. Mainnet is disabled. Do not use meaningful funds.
 
 ECDSA public keys become visible when an account signs. A future cryptanalytic break could make historically exposed keys more valuable targets. Bunker narrows that exposure by coupling a supported action and fresh-owner rotation in one atomic wallet operation. It is not “quantum-safe”: the pending transaction exposes a signature before confirmation, browser seed theft defeats rotation, and Ethereum still uses ECDSA.
 
@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- compact three-step Sepolia flow: create setup key, fund through the Google Cloud faucet with the address copied, deploy a stable demo wallet;
+- compact three-step Base Sepolia flow: create setup key, fund through the Coinbase Developer Platform faucet with the address copied, deploy a stable demo wallet;
 - ETH, ERC-20 and short message actions that atomically rotate to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -41,7 +41,7 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Sepolia demo wallet | Implemented but unaudited; browser-driven deployment |
+| Base Sepolia demo wallet | Implemented but unaudited; browser-driven deployment |
 | Production Safe deployment | Disabled pending real integration tests and audit |
 | Ethereum mainnet | Runtime rejected |
 
@@ -49,7 +49,7 @@ Blocked today:
 
 ```mermaid
 flowchart TB
-  PWA[SolidJS PWA] --> D[Sepolia demo wallet]
+  PWA[SolidJS PWA] --> D[Base Sepolia demo wallet]
   D --> A[ETH / ERC-20 / message action]
   A --> K[Fund and activate next owner]
   PWA --> V[Encrypted recovery]
@@ -60,7 +60,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Quick Sepolia setup** creates a random key in the current tab and copies its address and opens the Google Cloud faucet. It can deploy and use the demo wallet, but refresh loses access. Use recovery-phrase setup for deterministic owner recovery; record the stable wallet address alongside the phrase for restoration on another device.
+**Quick Base Sepolia setup** creates a random key in the current tab and copies its address and opens the Coinbase Developer Platform faucet. It can deploy and use the demo wallet, but refresh loses access. Use recovery-phrase setup for deterministic owner recovery; record the stable wallet address alongside the phrase for restoration on another device.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 

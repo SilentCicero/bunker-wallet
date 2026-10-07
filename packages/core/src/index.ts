@@ -2,7 +2,7 @@ import { concatHex, encodePacked, getAddress, isAddress, keccak256, stringToHex,
 
 export const BATCH_SIZE = 20;
 export const RESERVED_ROTATIONS = 1;
-export const SUPPORTED_CHAIN_IDS = [31337, 11155111] as const;
+export const SUPPORTED_CHAIN_IDS = [31337, 84532] as const;
 export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as Address;
 const DOMAIN = keccak256(stringToHex("BUNKER_OWNER_V1"));
 const EMPTY = keccak256("0x02");
@@ -11,8 +11,8 @@ export class SecurityPolicyError extends Error { override name = "SecurityPolicy
 export type SequenceContext = { chainId: number; safe: Address; version: number };
 export type MerkleProof = { index: number; siblings: Hex[] };
 
-export function assertSupportedChain(chainId: number): asserts chainId is 31337 | 11155111 {
-  if (!SUPPORTED_CHAIN_IDS.includes(chainId as 31337 | 11155111)) throw new SecurityPolicyError("Only local Anvil and Sepolia are enabled. Mainnet is locked.");
+export function assertSupportedChain(chainId: number): asserts chainId is 31337 | 84532 {
+  if (!SUPPORTED_CHAIN_IDS.includes(chainId as 31337 | 84532)) throw new SecurityPolicyError("Only local Anvil and Base Sepolia are enabled. Mainnet is locked.");
 }
 export function normalizeAddresses(input: readonly string[]): Address[] {
   if (input.length !== BATCH_SIZE) throw new SecurityPolicyError(`Exactly ${BATCH_SIZE} future owners are required.`);

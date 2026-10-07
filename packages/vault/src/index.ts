@@ -5,7 +5,7 @@ import { wordlist } from "@scure/bip39/wordlists/english.js";
 import { SecurityPolicyError } from "@bunker/core";
 type KdfParams={memoryKiB:number;iterations:number;parallelism:1};
 const KDF:KdfParams={memoryKiB:19456,iterations:2,parallelism:1};
-export type VaultMetadata={chainId:31337|11155111;safe?:`0x${string}`;derivation:"m/44'/60'/7331'/0/index";sequenceVersion:1};
+export type VaultMetadata={chainId:31337|11155111|84532;safe?:`0x${string}`;derivation:"m/44'/60'/7331'/0/index";sequenceVersion:1};
 export type EncryptedVault={version:1;kdf:{name:"argon2id";memoryKiB:number;iterations:number;parallelism:number;salt:string};cipher:{name:"AES-256-GCM";nonce:string;ciphertext:string};metadata:VaultMetadata};
 export function newMnemonic():string{return generateMnemonic(wordlist,256)}
 export function validMnemonic(value:string):boolean{return value.trim().split(/\s+/).length===24&&validateMnemonic(value.trim(),wordlist)}
