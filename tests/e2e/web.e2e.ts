@@ -16,11 +16,11 @@ for (const [name, width, height] of views) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try local preview" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try it" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Use Ethereum Sepolia" })).toBeVisible();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
-    await expect(page.getByText("Less exposure.")).toBeVisible();
+    await expect(page.locator(".roadmap h2")).toBeVisible();
     await expect(page.getByText("MIT open source")).toBeVisible();
     await expect(page.getByRole("link", { name: /View the source/ })).toHaveAttribute("href", "https://github.com/SilentCicero/bunker-wallet");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -30,17 +30,21 @@ for (const [name, width, height] of views) {
   });
 }
 
-test("local preview creates a wallet and rotates without network funding", async ({ page }) => {
+test("local preview opens the wallet and rotates without network access", async ({ page }) => {
+  const external: string[] = [];
+  page.on("request", request => { if (!request.url().startsWith("http://127.0.0.1")) external.push(request.url()); });
   await page.goto("/");
-  await page.getByRole("button", { name: "Try local preview" }).first().click();
-  await expect(page.getByRole("heading", { name: "Your local preview is ready." })).toBeVisible();
-  await page.getByRole("button", { name: "Create stable wallet" }).click();
+  await page.getByRole("button", { name: "Try it" }).first().click();
   await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
-  await page.getByRole("button", { name: "Wall", exact: true }).click();
-  await page.getByPlaceholder("Hello from my rotating wallet").fill("Local rotation demo");
-  await page.getByRole("button", { name: "Post + rotate key" }).click();
+  await expect(page.getByLabel("Recipient")).toHaveValue("vitalik.eth");
+  await expect(page.getByLabel("Amount")).toHaveValue("0.001");
+  const previousSigner = await page.locator(".signer-steps .current code").innerText();
+  await page.getByRole("button", { name: "Send + rotate key" }).click();
   await expect(page.getByRole("status")).toContainText("Simulated locally — not broadcast");
   await expect(page.getByText("Key 2", { exact: true })).toBeVisible();
+  await expect(page.locator(".signer-steps .current code")).not.toHaveText(previousSigner);
+  await expect(page.locator(".activity-row code").first()).toContainText(previousSigner);
+  expect(external).toEqual([]);
 });
 
 test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ page }) => {
