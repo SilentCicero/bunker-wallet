@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- compact three-step Sepolia flow: create setup key, fund from a prefilled faucet link, deploy a stable demo wallet;
+- compact three-step Sepolia flow: create setup key, fund through the QuickNode faucet with the address copied, deploy a stable demo wallet;
 - ETH, ERC-20 and short message actions that atomically rotate to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -60,7 +60,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Quick Sepolia setup** creates a random key in the current tab and opens the Google Cloud faucet. It can deploy and use the demo wallet, but refresh loses access. Use recovery-phrase setup for deterministic owner recovery; record the stable wallet address alongside the phrase for restoration on another device.
+**Quick Sepolia setup** creates a random key in the current tab and copies its address and opens the QuickNode faucet. It can deploy and use the demo wallet, but refresh loses access. Use recovery-phrase setup for deterministic owner recovery; record the stable wallet address alongside the phrase for restoration on another device.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 
