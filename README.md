@@ -1,27 +1,28 @@
 # Bunker Wallet
 
-Bunker Wallet is an **unaudited local/testnet alpha** exploring Safe accounts that atomically advance to a precommitted fresh ECDSA owner after every supported ETH transfer. Mainnet is disabled. Do not use meaningful funds.
+Bunker Wallet is an **unaudited Sepolia demonstration** of one stable Ethereum contract address whose ECDSA owner advances after every supported action. The hosted demo contract is intentionally smaller than the planned Safe architecture. Mainnet is disabled. Do not use meaningful funds.
 
-ECDSA public keys become visible when an account signs. A future cryptanalytic break could make historically exposed keys more valuable targets. Bunker narrows that exposure by coupling a supported action and fresh-owner rotation in one guarded Safe operation. It is not “quantum-safe”: the pending transaction exposes a signature before confirmation, browser seed theft defeats rotation, and Ethereum still uses ECDSA.
+ECDSA public keys become visible when an account signs. A future cryptanalytic break could make historically exposed keys more valuable targets. Bunker narrows that exposure by coupling a supported action and fresh-owner rotation in one atomic wallet operation. It is not “quantum-safe”: the pending transaction exposes a signature before confirmation, browser seed theft defeats rotation, and Ethereum still uses ECDSA.
 
 ```mermaid
 sequenceDiagram
   participant A as Current owner A
-  participant S as Safe 1.4.1
-  participant G as Rotation guard
+  participant S as Stable demo wallet
+  participant G as Atomic action policy
   participant B as Next owner B
-  A->>S: Sign exact ETH transfer + swapOwner batch
-  S->>G: Validate finite commitment and zero-refund policy
-  G-->>S: Permit exact batch only
-  S->>S: Transfer ETH, then swap A to B
-  S->>G: Verify success, sole owner B, threshold 1, no modules
+  A->>S: Sign supported action with next owner
+  S->>G: Validate owner, action, next EOA and gas reserve
+  G-->>S: Permit atomically
+  S->>S: Execute action, fund B, rotate A to B
 ```
 
 ## Current alpha
 
 Working today:
 
-- one-click, memory-only Sepolia burner creation with a Google Cloud faucet handoff and balance refresh;
+- compact three-step Sepolia flow: create setup key, fund from a prefilled faucet link, deploy a stable demo wallet;
+- ETH, ERC-20 and short message actions that atomically rotate to a fresh owner;
+- visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
 - 24-word BIP-39 creation and recovery confirmation;
 - optional Argon2id + AES-256-GCM encrypted local vault;
@@ -40,26 +41,26 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Safe deployment, signing, broadcasting | Disabled pending real integration tests and audit |
+| Sepolia demo wallet | Implemented but unaudited; browser-driven deployment |
+| Production Safe deployment | Disabled pending real integration tests and audit |
 | Ethereum mainnet | Runtime rejected |
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-  PWA[SolidJS PWA] --> V[Encrypted vault]
-  PWA --> C[Commitment policy]
-  PWA --> E[Offline envelope]
-  E --> R[Local validation relay]
-  C -. blocked release gate .-> G[BunkerRotationGuard]
-  G -. exact operation .-> S[Official Safe 1.4.1]
+  PWA[SolidJS PWA] --> D[Sepolia demo wallet]
+  D --> A[ETH / ERC-20 / message action]
+  A --> K[Fund and activate next owner]
+  PWA --> V[Encrypted recovery]
+  D -. future audited architecture .-> S[Official Safe + rotation guard]
 ```
 
 See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), and [security status](SECURITY_STATUS.md).
 
 ## Storage choices
 
-**Quick Sepolia burner** creates a random key in the current tab, copies its address, and opens the Google Cloud faucet. It is lost on refresh, is not backed up, and cannot sign or send in this alpha.
+**Quick Sepolia setup** creates a random key in the current tab and opens the Google Cloud faucet. It can deploy and use the demo wallet, but refresh loses access. Use recovery-phrase setup for deterministic owner recovery; record the stable wallet address alongside the phrase for restoration on another device.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 
