@@ -22,6 +22,9 @@ for (const [name, width, height] of views) {
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
     await expect(page.locator(".roadmap h2")).toBeVisible();
     await expect(page.getByText("MIT open source")).toBeVisible();
+    await expect(page.getByText("External perspective")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Load post from X" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open directly on X →" })).toHaveAttribute("href", "https://x.com/drakefjustin/status/2107837081313505768");
     await expect(page.getByRole("link", { name: /View the source/ })).toHaveAttribute("href", "https://github.com/SilentCicero/bunker-wallet");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.screenshot({ path: `.impeccable/review/${name}-light.png`, fullPage: true });
@@ -62,6 +65,13 @@ test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ pa
   expect(popup.url()).toContain("cloud.google.com/application/web3/faucet/ethereum/sepolia");
   await popup.close();
   await page.screenshot({ path: ".impeccable/review/setup-light.png", fullPage: true });
+});
+
+test("X post loads only after consent", async ({ page }) => {
+  await page.route("https://platform.twitter.com/widgets.js", route => route.fulfill({ contentType: "application/javascript", body: "" }));
+  await page.goto("/");
+  await page.getByRole("button", { name: "Load post from X" }).click();
+  await expect(page.getByRole("link", { name: "Read the post by Justin Drake on X" })).toHaveAttribute("href", "https://x.com/drakefjustin/status/2107837081313505768");
 });
 
 test("advanced phrase setup offers optional check and password", async ({ page }) => {
