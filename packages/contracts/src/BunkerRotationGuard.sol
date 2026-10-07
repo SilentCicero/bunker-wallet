@@ -50,7 +50,7 @@ contract BunkerRotationGuard is BaseGuard {
             level[i] = keccak256(abi.encodePacked(bytes1(0), DOMAIN, block.chainid, msg.sender, uint32(1), uint8(i), owner));
         }
         bytes32 empty = keccak256(hex"02"); for (uint256 i=BATCH_SIZE;i<32;++i) level[i]=empty;
-        for (uint256 width=32;width>1;width/=2) for(uint256 i;i<width;i+=2) level[i/2]=keccak256(abi.encodePacked(bytes1(1),level[i],level[i+1]));
+        for (uint256 width=32;width>1;width/=2) for(uint256 i;i<width;i+=2) level[i/2]=keccak256(abi.encodePacked(bytes1(0x01),level[i],level[i+1]));
         s.root=level[0];s.initialized=true;emit SequenceInitialized(msg.sender,level[0]);
     }
 

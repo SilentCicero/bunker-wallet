@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-07T20:07:48.942Z",
+  "generatedAt": "2026-10-07T20:13:43.427Z",
   "directProduction": [
     {
       "name": "@noble/hashes",
@@ -28,6 +28,10 @@
       "version": "1.4.2"
     },
     {
+      "name": "solc",
+      "version": "0.8.24"
+    },
+    {
       "name": "typescript",
       "version": "5.9.3"
     },
@@ -41,6 +45,6 @@
     }
   ],
   "directCount": 4,
-  "lockfileBytes": 31992,
+  "lockfileBytes": 33770,
   "trustedLifecycleDependencies": []
 }

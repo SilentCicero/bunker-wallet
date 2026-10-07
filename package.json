@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "relayer": "bun apps/relayer/src/index.ts",
     "dependency:report": "bun scripts/dependency-report.ts",
+    "contract:compile": "bun scripts/compile-contract.ts",
     "release:verify": "bun scripts/release-verification.ts"
   },
   "dependencies": {
@@ -26,9 +27,13 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/bun": "1.4.2",
+    "solc": "0.8.24",
     "typescript": "5.9.3",
     "vite": "8.3.3",
     "vite-plugin-solid": "2.11.14"
   },
-  "trustedDependencies": []
+  "trustedDependencies": [],
+  "overrides": {
+    "tmp": "0.2.7"
+  }
 }

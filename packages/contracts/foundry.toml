@@ -7,4 +7,4 @@ solc_version = "0.8.24"
 evm_version = "paris"
 optimizer = true
 optimizer_runs = 100000
-remappings = ["@safe-global/safe-contracts/=lib/safe-contracts/"]
+remappings = ["@safe-global/safe-contracts/=lib/@safe-global/safe-contracts/"]

@@ -74,6 +74,7 @@ bun run dev
 bun run typecheck
 bun test
 bun run build
+bun run contract:compile
 bun run dependency:report
 bun run release:verify
 ```
@@ -84,7 +85,7 @@ The static site builds to `apps/web/dist`, ready for Cloudflare Pages. The local
 bun run relayer
 ```
 
-Foundry is not currently installed in the implementation environment. Contract source is under `packages/contracts`; it must pass real Safe/Anvil integration, fuzzing, and an independent audit before deployment.
+The guard compiles with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Foundry is not installed in the implementation environment; real Safe/Anvil execution, fuzzing, atomic bootstrap, and independent audit remain mandatory before deployment.
 
 ## Security model and recovery
 
