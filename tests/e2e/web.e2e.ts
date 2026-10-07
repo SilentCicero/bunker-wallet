@@ -10,6 +10,9 @@ const views = [
 ] as const;
 
 test.beforeAll(() => mkdirSync(".impeccable/review", { recursive: true }));
+test.beforeEach(async ({ page }) => {
+  await page.route("https://platform.twitter.com/widgets.js", route => route.fulfill({ contentType: "application/javascript", body: "" }));
+});
 
 for (const [name, width, height] of views) {
   test(`${name} landing renders in both themes`, async ({ page }) => {
@@ -23,19 +26,18 @@ for (const [name, width, height] of views) {
     await expect(page.locator(".roadmap h2")).toBeVisible();
     await expect(page.getByText("MIT open source")).toBeVisible();
     await expect(page.getByText("External perspective")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Load post from X" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open directly on X →" })).toHaveAttribute("href", "https://x.com/drakefjustin/status/2107837081313505768");
     await expect(page.getByRole("link", { name: /View the source/ })).toHaveAttribute("href", "https://github.com/SilentCicero/bunker-wallet");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
     await page.screenshot({ path: `.impeccable/review/${name}-light.png`, fullPage: true });
-    await page.getByRole("button", { name: "Dark" }).click();
+    await page.getByRole("button", { name: "Use dark mode" }).click();
     await page.screenshot({ path: `.impeccable/review/${name}-dark.png`, fullPage: true });
   });
 }
 
-test("local preview opens the wallet and rotates without network access", async ({ page }) => {
-  const external: string[] = [];
-  page.on("request", request => { if (!request.url().startsWith("http://127.0.0.1")) external.push(request.url()); });
+test("local preview rotates without blockchain access", async ({ page }) => {
+  const blockchainRequests: string[] = [];
+  page.on("request", request => { if (/ethereum-sepolia-rpc|cloud\.google\.com\/application\/web3\/faucet/.test(request.url())) blockchainRequests.push(request.url()); });
   await page.goto("/");
   await page.getByRole("button", { name: "Try it" }).first().click();
   await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
@@ -51,7 +53,7 @@ test("local preview opens the wallet and rotates without network access", async 
   await expect(page.getByText("Key 2", { exact: true })).toBeVisible();
   await expect(page.locator(".signer-steps .current code")).not.toHaveText(previousSigner);
   await expect(page.locator(".activity-row code").first()).toContainText(previousSigner);
-  expect(external).toEqual([]);
+  expect(blockchainRequests).toEqual([]);
 });
 
 test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ page }) => {
@@ -69,11 +71,12 @@ test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ pa
   await page.screenshot({ path: ".impeccable/review/setup-light.png", fullPage: true });
 });
 
-test("X post loads only after consent", async ({ page }) => {
-  await page.route("https://platform.twitter.com/widgets.js", route => route.fulfill({ contentType: "application/javascript", body: "" }));
+test("X post loads automatically", async ({ page }) => {
+  let widgetRequests = 0;
+  page.on("request", request => { if (request.url()==="https://platform.twitter.com/widgets.js") widgetRequests++; });
   await page.goto("/");
-  await page.getByRole("button", { name: "Load post from X" }).click();
   await expect(page.getByRole("link", { name: "Read the post by Justin Drake on X" })).toHaveAttribute("href", "https://x.com/drakefjustin/status/2107837081313505768");
+  expect(widgetRequests).toBe(1);
 });
 
 test("advanced phrase setup offers optional check and password", async ({ page }) => {
