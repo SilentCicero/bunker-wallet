@@ -5,7 +5,7 @@ import { demoWalletAbi, demoWalletBytecode } from "./demoContract";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
-export const SEPOLIA_FAUCET = "https://faucet.quicknode.com/ethereum/sepolia";
+export const SEPOLIA_FAUCET = "https://www.alchemy.com/faucets/ethereum-sepolia";
 let privateKey: Hex | undefined;
 let mnemonicSecret: string | undefined;
 let pendingPrivateKey: Hex | undefined;
