@@ -18,9 +18,22 @@ for (const [name, width, height] of views) test(`${name} renders without overflo
   await page.screenshot({ path: `.impeccable/review/${name}-light.png`, fullPage: true });
 });
 
+test("one click creates a memory-only Sepolia burner and opens the faucet", async ({ page }) => {
+  await page.goto("/");
+  const popupPromise = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Try Sepolia in one click" }).click();
+  const popup = await popupPromise;
+  await expect(page.getByRole("heading", { name: "Fund it, then explore." })).toBeVisible();
+  await expect(page.locator(".identifier code")).toHaveText(/^0x[0-9a-fA-F]{40}$/);
+  expect(await page.evaluate(() => Object.keys(localStorage).every(key => !key.includes("burner")))).toBe(true);
+  await page.screenshot({ path: ".impeccable/review/burner-dark.png", fullPage: true });
+  expect(popup.url()).toContain("cloud.google.com/application/web3/faucet/ethereum/sepolia");
+  await popup.close();
+});
+
 test("backup acknowledgement gates recovery confirmation", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Create local wallet" }).click();
+  await page.getByRole("button", { name: "Create recoverable wallet" }).click();
   const next = page.getByRole("button", { name: "Verify recovery" });
   await expect(next).toBeDisabled();
   await page.getByRole("checkbox").check();

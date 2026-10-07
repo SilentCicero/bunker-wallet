@@ -21,6 +21,7 @@ sequenceDiagram
 
 Working today:
 
+- one-click, memory-only Sepolia burner creation with a Google Cloud faucet handoff and balance refresh;
 - polished offline-capable SolidJS PWA;
 - 24-word BIP-39 creation and recovery confirmation;
 - optional Argon2id + AES-256-GCM encrypted local vault;
@@ -57,6 +58,8 @@ flowchart TB
 See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), and [security status](SECURITY_STATUS.md).
 
 ## Storage choices
+
+**Quick Sepolia burner** creates a random key in the current tab, copies its address, and opens the Google Cloud faucet. It is lost on refresh, is not backed up, and cannot sign or send in this alpha.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 

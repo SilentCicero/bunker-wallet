@@ -9,6 +9,7 @@
 - 24-word BIP-39 generation and authenticated Argon2id/AES-GCM local vaults.
 - Runtime chain policy accepts only local Anvil `31337` and Sepolia `11155111`.
 - Static web UI and loopback-only validation relay with no signing key.
+- Sepolia-only ephemeral burner generation, faucet handoff, and read-only balance lookup. Burner keys remain memory-only and cannot sign or send in this alpha.
 
 ## Disabled
 
