@@ -4,7 +4,7 @@
 
 ## Implemented
 
-- Default local preview with no RPC, faucet, broadcast, persistence, or real assets.
+- Default local preview uses a hidden, memory-only BIP-39 mnemonic and fully hardened BIP-32 owner paths, with no RPC, faucet, broadcast, persistence, or real assets.
 - Optional Ethereum Sepolia Safe 1.4.1 proxy deployment using the official canonical singleton, proxy factory, and `MultiSendCallOnly` addresses.
 - Atomic Safe setup helper that initializes and installs `BunkerRotationGuard` during proxy creation.
 - Runtime hash checks for official Safe components before deployment and Safe owner/module/guard/singleton attestation before funding.
@@ -22,7 +22,7 @@ Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules;
 
 ## Test status and release blockers
 
-Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the local preview and optional Sepolia faucet handoff.
+Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the BIP-39/hardened-BIP-32 local preview and verifies that every Sepolia entry point remains disabled.
 
 Still required before broader use:
 

@@ -59,7 +59,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Try local preview** creates a session-only simulated wallet with no RPC, faucet, broadcast, or persistent keys. **Use Ethereum Sepolia** creates a memory-only setup key, opens the Google Cloud faucet, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
+**Try local preview** creates a hidden in-memory BIP-39 mnemonic and derives each simulated owner through fully hardened BIP-32 path `m/44'/60'/7331'/1'/index'`, with no RPC, faucet, broadcast, or persistent keys. **Ethereum Sepolia is currently disabled** pending a funded live smoke test; its implementation creates a memory-only setup key, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 

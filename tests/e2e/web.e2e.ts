@@ -41,6 +41,8 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Try it" }).first().click();
   await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
+  await expect(page.getByText(/BIP-39 → hardened BIP-32/)).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage).every(key => !/mnemonic|seed|phrase/i.test(key)))).toBe(true);
   await expect(page.getByRole("button", { name: "Copy stable Safe address" })).toBeVisible();
   await expect(page.locator(".address-copy")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Token" })).toHaveCount(0);

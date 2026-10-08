@@ -67,6 +67,8 @@ const mnemonicKey = (mnemonic: string, index: number) => {
   if (!key) throw new Error("Recovery key could not be derived.");
   return toHex(key);
 };
+export const deriveLocalPreviewAddress = (mnemonic: string, index: number): Address =>
+  mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/1'/${index}'` }).address;
 const ownerAccount = () => { if (!privateKey) throw new Error("Create or load a testnet key first."); return privateKeyToAccount(privateKey); };
 const sponsorClient = () => {
   if (!sponsorPrivateKey) throw new Error("The Sepolia broadcaster key is unavailable. Restore or restart setup.");
