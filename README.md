@@ -1,13 +1,13 @@
 # Bunker Wallet
 
-Bunker Wallet is a **local-first simulation** of one stable Ethereum address whose ECDSA owner advances after every supported action. An optional unaudited Ethereum Sepolia mode uses the smaller demonstration contract. Mainnet is disabled. Do not use meaningful funds.
+Bunker Wallet is a **local-first simulation** of one stable Ethereum address whose ECDSA owner advances after every supported action. Its optional unaudited Ethereum Sepolia mode deploys an official Safe 1.4.1 proxy with Bunker’s fixed-sequence rotation guard. Mainnet is disabled. Do not use meaningful funds.
 
 ECDSA public keys become visible when an account signs. A future cryptanalytic break could make historically exposed keys more valuable targets. Bunker narrows that exposure by coupling a supported action and fresh-owner rotation in one atomic wallet operation. It is not “quantum-safe”: the pending transaction exposes a signature before confirmation, browser seed theft defeats rotation, and Ethereum still uses ECDSA.
 
 ```mermaid
 sequenceDiagram
   participant A as Current owner A
-  participant S as Stable demo wallet
+  participant S as Safe wallet
   participant G as Atomic action policy
   participant B as Next owner B
   A->>S: Sign supported action with next owner
@@ -41,26 +41,25 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Ethereum Sepolia demo wallet | Implemented but unaudited; browser-driven deployment |
-| Production Safe deployment | Disabled pending real integration tests and audit |
+| Ethereum Sepolia Safe | Implemented but unaudited; browser-driven deployment |
+| Production/mainnet Safe | Disabled pending independent audit |
 | Ethereum mainnet | Runtime rejected |
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-  PWA[SolidJS PWA] --> D[Ethereum Sepolia demo wallet]
-  D --> A[ETH send action]
-  A --> K[Fund and activate next owner]
+  PWA[SolidJS PWA] --> S[Official Safe 1.4.1 proxy]
+  S --> G[Bunker rotation guard]
+  G --> A[ETH send + next-owner funding + owner swap]
   PWA --> V[Encrypted recovery]
-  D -. future audited architecture .-> S[Official Safe + rotation guard]
 ```
 
 See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), [security decisions](docs/security-decisions.md), and [security status](SECURITY_STATUS.md).
 
 ## Storage choices
 
-**Try local preview** creates a session-only simulated wallet with no RPC, faucet, broadcast, or persistent keys. **Use Ethereum Sepolia** creates a random key in the current tab and opens the Google Cloud faucet; refresh loses access. Recovery-phrase setup provides deterministic owner recovery for Sepolia, and the stable wallet address must be recorded alongside the phrase.
+**Try local preview** creates a session-only simulated wallet with no RPC, faucet, broadcast, or persistent keys. **Use Ethereum Sepolia** creates a memory-only setup key, opens the Google Cloud faucet, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 
@@ -79,6 +78,9 @@ bun run typecheck
 bun test
 bun run build
 bun run contract:compile
+bun run contract:test
+# With a Sepolia-forked Anvil node on port 8545:
+bun run safe:smoke
 bun run dependency:report
 bun run release:verify
 ```
@@ -89,7 +91,7 @@ The static site builds to `apps/web/dist`, ready for Cloudflare Pages. The local
 bun run relayer
 ```
 
-The guard compiles with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Foundry is not installed in the implementation environment; real Safe/Anvil execution, fuzzing, atomic bootstrap, and independent audit remain mandatory before deployment.
+The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Foundry integration tests execute atomic proxy setup and guarded rotation locally. Independent audit, expanded fuzzing, and a funded restricted-value Sepolia smoke test remain mandatory before broader use.
 
 ## Security model and recovery
 

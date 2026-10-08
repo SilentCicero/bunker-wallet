@@ -4,29 +4,32 @@
 
 ## Implemented
 
-- Domain-separated, ordered fixed-batch commitment and proofs in TypeScript.
-- Strict bounded offline JSON envelopes with checksums and zero Safe refund fields.
+- Default local preview with no RPC, faucet, broadcast, persistence, or real assets.
+- Optional Ethereum Sepolia Safe 1.4.1 proxy deployment using the official canonical singleton, proxy factory, and `MultiSendCallOnly` addresses.
+- Atomic Safe setup helper that initializes and installs `BunkerRotationGuard` during proxy creation.
+- Runtime hash checks for official Safe components before deployment and Safe owner/module/guard/singleton attestation before funding.
+- ETH send, exact next-owner gas funding, and owner rotation in one guarded Safe transaction.
+- Fixed 20-owner sequence with 19 ordinary rotations; contract/sentinel/Safe owners, modules, refunds, arbitrary calls, and guard changes are rejected.
+- Canonical ABI-padding support and 65-byte canonical-low-s ECDSA signature policy.
+- Receipt-uncertainty reconciliation before promoting the next browser signer.
+- Recovery-phrase mode derives owners deterministically; quick setup remains memory-only and unrecoverable after refresh.
 - 24-word BIP-39 generation and authenticated Argon2id/AES-GCM local vaults.
-- Runtime chain policy accepts only local Anvil `31337` and Ethereum Sepolia `11155111`.
-- Static web UI and loopback-only validation relay with no signing key.
-- Default local preview uses no RPC, faucet, broadcast, persistence, or real assets.
-- Optional Ethereum Sepolia setup uses memory-only keys, a copied-address Google Cloud faucet handoff, demo-wallet deployment, and ETH sends.
-- Contract compilation and static review enforce atomic action, next-owner funding, and owner activation while preserving the wallet contract address.
-- Recovery-phrase mode derives owners deterministically; quick setup remains memory-only and is unrecoverable after refresh.
+- Runtime chain policy limited to local Anvil `31337` and Ethereum Sepolia `11155111`.
 
 ## Disabled
 
-Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules; guard changes; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses. The hosted UI exposes ETH sends only; compatibility methods remain in the unaudited demonstration contract.
+Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules; guard changes; sequence refill; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses.
 
 ## Test status and release blockers
 
-The local preview and optional Sepolia faucet handoff are automated in CI. No funded live Ethereum Sepolia deployment/action test or Solidity execution/fuzz suite exists yet.
+Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the local preview and optional Sepolia faucet handoff.
 
+Still required before broader use:
 
-1. Independent audit of the Ethereum Sepolia demonstration contract and guard behavior against the future exact Safe deployment.
-2. Real Anvil Safe proxy integration, adversarial Foundry fuzzing, atomic setup-helper validation, and verified contract code hashes.
-3. A reviewed sequence refill or migration protocol that prevents final-owner lockout.
-4. Physical Ledger/Trezor firmware matrix before hardware support claims.
-5. Ethereum Sepolia restricted-value exercise and reproducible CI release evidence.
+1. Independent audit of the setup helper, guard, browser Safe transaction builder, and recovery flow.
+2. A funded restricted-value Ethereum Sepolia deployment/action smoke test and reproducible deployment manifest.
+3. Expanded parser fuzzing, malicious recipient/reentrancy tests, and bytecode/proxy attestation tests.
+4. A reviewed sequence refill or migration protocol before the nineteenth rotation.
+5. Physical Ledger/Trezor firmware testing before hardware support claims.
 
 Browser encryption protects data at rest. It cannot protect a phrase while entered or unlocked from malicious page code, extensions, browser compromise, or the operating system. JavaScript cannot guarantee secure erasure.

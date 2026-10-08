@@ -15,6 +15,7 @@ interface ISafeView {
 contract BunkerRotationGuard is BaseGuard {
     uint256 public constant BATCH_SIZE = 20;
     uint256 public constant ORDINARY_ROTATION_LIMIT = 19; // index 19 remains reserved for audited migration.
+    uint256 public constant NEXT_OWNER_GAS = 0.001 ether;
     address public constant SENTINEL = address(0x1);
     bytes4 private constant MULTISEND = bytes4(keccak256("multiSend(bytes)"));
     bytes4 private constant SWAP_OWNER = bytes4(keccak256("swapOwner(address,address,address)"));
@@ -33,7 +34,7 @@ contract BunkerRotationGuard is BaseGuard {
     event RotationAuthorized(address indexed safe, uint256 indexed index, address indexed nextOwner);
 
     constructor(address _multiSendCallOnly, bytes32 _multiSendCodeHash) {
-        if (_multiSendCallOnly == address(0) || _multiSendCodeHash == bytes32(0)) revert Policy();
+        if ((block.chainid != 11155111 && block.chainid != 31337) || _multiSendCallOnly == address(0) || _multiSendCodeHash == bytes32(0) || _multiSendCallOnly.codehash != _multiSendCodeHash) revert Policy();
         multiSendCallOnly = _multiSendCallOnly; multiSendCodeHash = _multiSendCodeHash;
     }
 
@@ -43,9 +44,10 @@ contract BunkerRotationGuard is BaseGuard {
         address[] memory currentOwners = ISafeView(msg.sender).getOwners();
         if (currentOwners.length != 1 || ISafeView(msg.sender).getThreshold() != 1) revert Policy();
         address currentOwner = currentOwners[0];
+        if (currentOwner == SENTINEL || currentOwner == msg.sender || currentOwner.code.length != 0) revert Policy();
         bytes32[] memory level = new bytes32[](32);
         for (uint256 i; i < BATCH_SIZE; ++i) {
-            address owner = owners[i]; if (owner == address(0) || owner == currentOwner || consumed[msg.sender][owner]) revert Policy();
+            address owner = owners[i]; if (owner == address(0) || owner == SENTINEL || owner == msg.sender || owner == currentOwner || owner.code.length != 0 || consumed[msg.sender][owner]) revert Policy();
             consumed[msg.sender][owner] = true; committedOwner[msg.sender][i] = owner;
             level[i] = keccak256(abi.encodePacked(bytes1(0), DOMAIN, block.chainid, msg.sender, uint32(1), uint8(i), owner));
         }
@@ -61,7 +63,7 @@ contract BunkerRotationGuard is BaseGuard {
         if(!s.initialized||s.executing||to!=multiSendCallOnly||value!=0||operation!=Enum.Operation.DelegateCall||baseGas!=0||gasPrice!=0||gasToken!=address(0)||refundReceiver!=address(0))revert Policy();
         if(multiSendCallOnly.codehash!=multiSendCodeHash||signatures.length!=65||s.nextIndex>=ORDINARY_ROTATION_LIMIT)revert Policy();
         uint256 sigS;uint8 sigV;assembly{sigS:=mload(add(signatures,0x40)) sigV:=byte(0,mload(add(signatures,0x60)))}if(sigS>SECP256K1_HALF_N||(sigV!=27&&sigV!=28))revert Policy();
-        (address current,address next)=_parseBatch(data,msg.sender);address expected=committedOwner[msg.sender][s.nextIndex];if(next!=expected||current==next)revert Policy();
+        (address current,address next)=_parseBatch(data,msg.sender);address expected=committedOwner[msg.sender][s.nextIndex];if(next!=expected||current==next||current.code.length!=0||next.code.length!=0)revert Policy();
         address[] memory owners=ISafeView(msg.sender).getOwners();if(owners.length!=1||owners[0]!=current||ISafeView(msg.sender).getThreshold()!=1)revert Policy();
         (address[] memory modules,address cursor)=ISafeView(msg.sender).getModulesPaginated(SENTINEL,1);if(modules.length!=0||cursor!=SENTINEL)revert Policy();
         s.executing=true;emit RotationAuthorized(msg.sender,s.nextIndex,next);
@@ -73,10 +75,11 @@ contract BunkerRotationGuard is BaseGuard {
     }
 
     function _parseBatch(bytes memory outer,address safe) private pure returns(address current,address next){
-        if(outer.length<4+64||bytes4(outer)!=MULTISEND)revert Policy();uint256 offset;uint256 length;assembly{offset:=mload(add(outer,0x24)) length:=mload(add(outer,0x44))}if(offset!=32||outer.length!=68+length)revert Policy();uint256 p=68;
-        (uint8 op1,address to1,uint256 value1,uint256 len1)=_header(outer,p);if(op1!=0||to1==safe||to1==address(0)||value1==0||len1!=0)revert Policy();p+=85;
-        (uint8 op2,address to2,uint256 value2,uint256 len2)=_header(outer,p);if(op2!=0||to2!=safe||value2!=0||len2!=100||p+85+100!=outer.length)revert Policy();p+=85;
-        bytes4 selector;address prev;assembly{selector:=mload(add(add(outer,0x20),p)) prev:=and(mload(add(add(outer,0x24),p)),0xffffffffffffffffffffffffffffffffffffffff) current:=and(mload(add(add(outer,0x44),p)),0xffffffffffffffffffffffffffffffffffffffff) next:=and(mload(add(add(outer,0x64),p)),0xffffffffffffffffffffffffffffffffffffffff)}if(selector!=SWAP_OWNER||prev!=SENTINEL)revert Policy();
+        if(outer.length<4+64||bytes4(outer)!=MULTISEND)revert Policy();uint256 offset;uint256 length;assembly{offset:=mload(add(outer,0x24)) length:=mload(add(outer,0x44))}uint256 rawEnd=68+length;uint256 paddedEnd=68+((length+31)/32)*32;if(offset!=32||outer.length!=paddedEnd)revert Policy();for(uint256 i=rawEnd;i<paddedEnd;++i)if(outer[i]!=0)revert Policy();uint256 p=68;address funded;
+        { (uint8 op,address to,uint256 amount,uint256 len)=_header(outer,p);if(op!=0||to==safe||to==address(0)||amount==0||len!=0)revert Policy(); }p+=85;
+        { (uint8 op,address to,uint256 amount,uint256 len)=_header(outer,p);if(op!=0||to==safe||to==address(0)||amount!=NEXT_OWNER_GAS||len!=0)revert Policy();funded=to; }p+=85;
+        { (uint8 op,address to,uint256 amount,uint256 len)=_header(outer,p);if(op!=0||to!=safe||amount!=0||len!=100||p+85+100!=rawEnd)revert Policy(); }p+=85;
+        bytes4 selector;address prev;assembly{selector:=mload(add(add(outer,0x20),p)) prev:=and(mload(add(add(outer,0x24),p)),0xffffffffffffffffffffffffffffffffffffffff) current:=and(mload(add(add(outer,0x44),p)),0xffffffffffffffffffffffffffffffffffffffff) next:=and(mload(add(add(outer,0x64),p)),0xffffffffffffffffffffffffffffffffffffffff)}if(selector!=SWAP_OWNER||prev!=SENTINEL||funded!=next)revert Policy();
     }
     function _header(bytes memory data,uint256 p) private pure returns(uint8 op,address to,uint256 value,uint256 len){if(p+85>data.length)revert Policy();assembly{op:=byte(0,mload(add(add(data,0x20),p)))to:=shr(96,mload(add(add(data,0x21),p)))value:=mload(add(add(data,0x35),p))len:=mload(add(add(data,0x55),p))}}
 }

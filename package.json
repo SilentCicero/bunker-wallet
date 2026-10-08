@@ -16,6 +16,8 @@
     "relayer": "bun apps/relayer/src/index.ts",
     "dependency:report": "bun scripts/dependency-report.ts",
     "contract:compile": "bun scripts/compile-contract.ts",
+    "contract:test": "cd packages/contracts && forge test",
+    "safe:smoke": "VITE_SEPOLIA_RPC=http://127.0.0.1:8545 bun scripts/safe-anvil-smoke.ts",
     "release:verify": "bun scripts/release-verification.ts"
   },
   "dependencies": {
