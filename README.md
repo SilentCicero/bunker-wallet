@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- faucet-free local preview by default, plus an optional Ethereum Sepolia flow using the Google Cloud faucet;
+- faucet-free local preview by default; the Ethereum Sepolia UI remains disabled pending funded live-smoke evidence;
 - an ETH-send flow that atomically rotates to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -44,6 +44,10 @@ Blocked today:
 | Ethereum Sepolia Safe | Implemented but unaudited; browser-driven deployment |
 | Production/mainnet Safe | Disabled pending independent audit |
 | Ethereum mainnet | Runtime rejected |
+
+## Future roadmap (not implemented)
+
+- **Private transaction submission / protected relay:** evaluate private builder or relay submission to reduce public-mempool visibility of pending ECDSA signatures and exposed public keys during rotation. This would not hide them from the selected relay, builders or validators, or from the eventual chain, and it would not make Bunker quantum-safe. Relay trust, censorship and leakage risks, fallback behavior, and the complete integration require review and audit before this can be enabled.
 
 ## Architecture
 
