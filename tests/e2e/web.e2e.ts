@@ -20,7 +20,7 @@ for (const [name, width, height] of views) {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
     await expect(page.getByRole("button", { name: "Try it" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Use Ethereum Sepolia" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Experimental Safe on Sepolia" })).toBeVisible();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
     await expect(page.locator(".roadmap h2")).toBeVisible();
@@ -61,7 +61,7 @@ test("local preview rotates without blockchain access", async ({ page }) => {
 
 test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Use Ethereum Sepolia" }).click();
+  await page.getByRole("button", { name: "Experimental Safe on Sepolia" }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
   const address = await page.locator(".setup-address code").innerText();
   expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);

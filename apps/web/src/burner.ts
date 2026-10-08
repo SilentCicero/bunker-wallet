@@ -131,6 +131,7 @@ const packedCall = (to: Address, value: bigint, data: Hex = "0x") => concatHex([
 async function rotatedWrite(safe: Address, to: Address, amount: bigint): Promise<Hex> {
   if (!guardAddress) throw new Error("The Safe guard address is unavailable. Restore or restart setup.");
   await reconcilePending(safe);
+  if (pendingPrivateKey) throw new Error("The previous owner rotation is still pending. Wait for confirmation before sending again.");
   const current = ownerAccount();
   const next = sequence()[ownerIndex];
   if (!next) throw new Error("The fixed owner sequence is exhausted.");
