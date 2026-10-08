@@ -20,7 +20,7 @@ for (const [name, width, height] of views) {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
     await expect(page.getByRole("button", { name: "Try it" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Experimental Safe on Sepolia" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use Ethereum Seplia (Soon)" })).toBeDisabled();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
     await expect(page.locator(".roadmap h2")).toBeVisible();
@@ -61,19 +61,13 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "One address. Fresh keys." })).toBeVisible();
 });
 
-test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ page }) => {
+test("Ethereum Sepolia remains disabled", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Experimental Safe on Sepolia" }).click();
-  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
-  const address = await page.locator(".setup-address code").innerText();
-  expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
-  expect(await page.evaluate(() => Object.keys(localStorage).every(key => !key.includes("burner")))).toBe(true);
-  const popupPromise = page.waitForEvent("popup");
-  await page.getByRole("button", { name: "Open Google Cloud faucet" }).click();
-  const popup = await popupPromise;
-  expect(popup.url()).toContain("cloud.google.com/application/web3/faucet/ethereum/sepolia");
-  await popup.close();
-  await page.screenshot({ path: ".impeccable/review/setup-light.png", fullPage: true });
+  await expect(page.getByRole("button", { name: "Use Ethereum Seplia (Soon)" })).toBeDisabled();
+  await page.getByRole("button", { name: "Setup options" }).click();
+  await expect(page.getByRole("button", { name: /Use Ethereum Seplia/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Recovery phrase/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Load existing wallet/ })).toBeDisabled();
 });
 
 test("X post loads automatically", async ({ page }) => {
@@ -82,15 +76,4 @@ test("X post loads automatically", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("link", { name: "Read the post by Justin Drake on X" })).toHaveAttribute("href", "https://x.com/drakefjustin/status/2107837081313505768");
   expect(widgetRequests).toBe(1);
-});
-
-test("advanced phrase setup offers optional check and password", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Setup options" }).click();
-  await page.getByRole("button", { name: /Recovery phrase/ }).click();
-  const next = page.getByRole("button", { name: "Check my backup" });
-  await expect(next).toBeDisabled();
-  await page.getByRole("checkbox").check();
-  await expect(next).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Skip check" })).toBeEnabled();
 });
