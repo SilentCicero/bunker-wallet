@@ -57,6 +57,8 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   await expect(page.locator(".signer-steps .current code")).not.toHaveText(previousSigner);
   await expect(page.locator(".activity-row code").first()).toContainText(previousSigner);
   expect(blockchainRequests).toEqual([]);
+  await page.getByRole("button", { name: "B Bunker" }).click();
+  await expect(page.getByRole("heading", { name: "One address. Fresh keys." })).toBeVisible();
 });
 
 test("optional Ethereum Sepolia flow opens the Google Cloud faucet", async ({ page }) => {
