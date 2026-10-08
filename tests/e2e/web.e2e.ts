@@ -20,7 +20,7 @@ for (const [name, width, height] of views) {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
     await expect(page.getByRole("button", { name: "Try it" }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Use Ethereum Seplia (Soon)" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Use Ethereum Sepolia (Soon)" })).toBeDisabled();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
     await expect(page.locator(".roadmap h2")).toBeVisible();
@@ -63,9 +63,9 @@ test("local preview rotates without blockchain access", async ({ page }) => {
 
 test("Ethereum Sepolia remains disabled", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Use Ethereum Seplia (Soon)" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Use Ethereum Sepolia (Soon)" })).toBeDisabled();
   await page.getByRole("button", { name: "Setup options" }).click();
-  await expect(page.getByRole("button", { name: /Use Ethereum Seplia/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Use Ethereum Sepolia/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Recovery phrase/ })).toBeDisabled();
   await expect(page.getByRole("button", { name: /Load existing wallet/ })).toBeDisabled();
 });
