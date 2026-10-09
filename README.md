@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- faucet-free local preview by default; the Ethereum Sepolia UI remains disabled pending independent review;
+- faucet-free local simulation plus a live, unaudited Sepolia testnet flow at `https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev`; Test ETH only—never use mainnet ETH or meaningful funds;
 - an ETH-send flow that atomically rotates to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -41,17 +41,28 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Ethereum Sepolia Safe | Direct and browser-funded deploy/send/multi-rotate tests passed; UI disabled pending independent review |
+| Ethereum Sepolia Safe | Live restricted-value testnet alpha; deploy, ETH send, owner rotation and recovery validated; independent audit required |
 | Production/mainnet Safe | Disabled pending independent audit |
 | Ethereum mainnet | Runtime rejected |
 
-## Future roadmap (not implemented)
+## Remaining roadmap (not implemented)
 
-- **Private transaction submission / protected relay:** evaluate private builder or relay submission to reduce public-mempool visibility of pending ECDSA signatures and exposed public keys during rotation. This would not hide them from the selected relay, builders or validators, or from the eventual chain, and it would not make Bunker quantum-safe. Relay trust, censorship and leakage risks, fallback behavior, and the complete integration require review and audit before this can be enabled.
+- independent review of the guard, atomic setup, browser transaction construction, recovery, persistence and runtime attestation;
+- expanded parser, signature-boundary, replacement, storage-attestation and reentrancy fuzz/property testing;
+- a reviewed owner-sequence refill or migration before the nineteenth ordinary rotation—no emergency bypass;
+- physical Ledger and Trezor validation before hardware signing support;
+- **private transaction submission / protected relay:** evaluate private builder or relay submission to reduce public-mempool visibility of pending ECDSA signatures and exposed public keys during rotation. This would not hide them from the selected relay, builders or validators, or from the eventual chain, and it would not make Bunker quantum-safe;
+- mainnet, meaningful-funds use, arbitrary calls, modules, refunds and production relaying remain disabled.
 
-### Non-production Sepolia test UI
+### Live Sepolia testnet
 
-`https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev` enable browser recovery, Safe deployment, and ETH-only sends for disposable Sepolia test ETH. The flow is unaudited, may be reset without notice, and must never receive mainnet ETH or meaningful assets. Ethereum mainnet remains disabled.
+`https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev` support browser recovery, official Safe deployment, and ETH-only sends using disposable Sepolia test ETH. The flow is unaudited, may be reset without notice, and must never receive mainnet ETH or meaningful assets. Ethereum mainnet remains disabled.
+
+1. Select **Create Wallet (Testnet)**.
+2. Back up and confirm the 24-word recovery phrase.
+3. Protect the browser with an optional password or browser-bound non-extractable device key.
+4. Fund the displayed setup key with at least **0.03 Sepolia ETH**.
+5. Create the guarded Safe wallet, then send ETH and rotate its owner atomically.
 
 ## Architecture
 
@@ -67,7 +78,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Try local preview** creates a hidden in-memory BIP-39 mnemonic and derives its stable preview address at `m/44'/60'/7331'/1'/0'` and simulated owners at fully hardened BIP-32 path `m/44'/60'/7331'/2'/index'`, with no RPC, faucet, broadcast, or persistent keys. **Ethereum Sepolia is currently disabled** pending independent review; its implementation creates a memory-only setup key, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
+**Try It (Simulation)** creates a hidden in-memory BIP-39 mnemonic and derives its stable preview address at `m/44'/60'/7331'/1'/0'` and simulated owners at fully hardened BIP-32 path `m/44'/60'/7331'/2'/index'`, with no RPC, faucet, broadcast, or persistent keys. **Create Wallet (Testnet)** requires recovery-phrase setup, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Record the stable Safe address alongside the phrase; there is no recovery backend.
 
 **Encrypted local vault** is the opt-in persistent browser-wallet mode: it derives a 256-bit key with Argon2id, uses a fresh AES-GCM nonce, and stores only the encrypted envelope in `localStorage`. The password is cleared after use. A saved wallet survives refreshes and browser restarts using AES-GCM ciphertext and a non-extractable WebCrypto key in IndexedDB; **Lock** or cleared site data requires the vault password or recovery phrase again. Compromised same-origin code, extensions, the browser profile, or OS can still use an unlocked wallet. Passwordless setup uses the same browser-bound encrypted device record and still requires the 24-word phrase on another device. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 
@@ -102,11 +113,11 @@ The static site builds to `apps/web/dist`, ready for Cloudflare Pages. The local
 bun run relayer
 ```
 
-The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Foundry integration tests execute atomic proxy setup and guarded rotation locally. Independent audit, expanded fuzzing, and a funded restricted-value Sepolia smoke test remain mandatory before broader use.
+The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Current checks include 27 Bun tests, 7 Foundry integration tests, a local Safe deployment/rotation smoke, a restricted live Sepolia deploy/send/two-rotation/recovery smoke, and gated browser lifecycle and persistence checks. The browser flow was validated with controlled test recipients; ENS resolution is tested separately. Independent audit and expanded fuzz/property testing remain mandatory before broader use.
 
 ## Security model and recovery
 
-The fixed batch has 20 future owners; the final transition is reserved to avoid silent exhaustion. There is no dynamic refill or emergency bypass. Recover with the exact seed/device and metadata, then reconcile the active owner from authenticated chain state. Without recovery material, access may be permanently lost.
+The fixed batch has 20 committed owners and permits 19 ordinary rotations; the final transition is reserved to avoid silent exhaustion. There is no reviewed refill/migration path or emergency bypass. Hosted actions are limited to recipient ETH send, exact next-owner funding and owner swap; arbitrary calls, modules and refunds are rejected. Recover with the exact seed/device and metadata, then reconcile the active owner from authenticated chain state. Without recovery material, access may be permanently lost.
 
 See [SECURITY.md](SECURITY.md) for responsible disclosure. Mainnet release is a separate decision requiring an independent review, verified deployments, reproducible evidence, and restricted-value testing.
 
