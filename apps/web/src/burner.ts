@@ -159,7 +159,13 @@ async function rotatedWrite(safe: Address, to: Address, amount: bigint): Promise
     await attestSafe(safe, privateKeyToAccount(privateKey!).address, guardAddress);
     return hash;
   } catch (error) {
-    try { await reconcilePending(safe); } catch {}
+    try {
+      await reconcilePending(safe);
+      if (!pendingPrivateKey) {
+        await attestSafe(safe, privateKeyToAccount(privateKey!).address, guardAddress);
+        return hash;
+      }
+    } catch {}
     throw error;
   }
 }

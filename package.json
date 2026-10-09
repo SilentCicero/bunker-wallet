@@ -19,6 +19,8 @@
     "contract:test": "cd packages/contracts && forge test",
     "safe:smoke": "VITE_SEPOLIA_RPC=http://127.0.0.1:8545 bun scripts/safe-anvil-smoke.ts",
     "safe:sepolia:e2e": "bun scripts/safe-sepolia-e2e.ts",
+    "safe:sepolia:fund-browser": "bun scripts/fund-sepolia-browser-e2e.ts",
+    "safe:sepolia:browser-e2e": "bun scripts/browser-sepolia-e2e.ts",
     "release:verify": "bun scripts/release-verification.ts"
   },
   "dependencies": {

@@ -41,7 +41,7 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Ethereum Sepolia Safe | Funded deploy/send/rotate/recover smoke passed; UI disabled pending independent review |
+| Ethereum Sepolia Safe | Direct and browser-funded deploy/send/multi-rotate tests passed; UI disabled pending independent review |
 | Production/mainnet Safe | Disabled pending independent audit |
 | Ethereum mainnet | Runtime rejected |
 
@@ -85,6 +85,9 @@ bun run contract:compile
 bun run contract:test
 # With a Sepolia-forked Anvil node on port 8545:
 bun run safe:smoke
+# Local-only, explicitly gated live runners; never run in CI:
+# bun run safe:sepolia:e2e
+# bun run safe:sepolia:browser-e2e
 bun run dependency:report
 bun run release:verify
 ```
