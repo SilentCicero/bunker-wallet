@@ -24,7 +24,7 @@ Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules;
 
 Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the BIP-39/hardened-BIP-32 local preview and verifies that every Sepolia entry point remains disabled.
 
-A restricted-value Ethereum Sepolia deploy → fund → ETH send → next-owner funding → owner rotation → phrase recovery smoke passed on 2026-10-09. Its sanitized evidence is stored locally with the E2E secret rather than committed with transaction identifiers. The hosted Sepolia UI remains disabled.
+A restricted-value Ethereum Sepolia deploy → fund → ETH send → exact next-owner funding → two successive owner rotations → phrase recovery smoke passed on 2026-10-09. Its sanitized evidence is stored locally with the E2E secret rather than committed with transaction identifiers. The hosted Sepolia UI remains disabled.
 
 Still required before broader use:
 

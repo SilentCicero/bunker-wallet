@@ -23,6 +23,7 @@ async function main() {
   const expectedSetup = process.env.BUNKER_SEPOLIA_SETUP_ADDRESS;
   const maxBalance = process.env.BUNKER_SEPOLIA_MAX_BALANCE_ETH;
   const manifestPath = process.env.BUNKER_SEPOLIA_MANIFEST;
+  const continuing = process.env.BUNKER_E2E_CONTINUE === "1";
   if (!mnemonic || !validMnemonic(mnemonic) || !expectedSetup || !maxBalance || !manifestPath) throw new Error("Live E2E secrets are incomplete.");
 
   const client = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC) });
@@ -30,18 +31,29 @@ async function main() {
   const setup = loadMnemonicSigner(mnemonic, 0);
   if (setup.toLowerCase() !== expectedSetup.toLowerCase()) fail("Setup derivation mismatch.");
   const balance = await readSepoliaBalance(setup);
-  if (balance < parseEther("0.03") || balance > parseEther(maxBalance)) fail("Setup balance is outside the approved range.");
+  if (balance <= 0n || (!continuing && balance < parseEther("0.03")) || balance > parseEther(maxBalance)) fail("Setup balance is outside the approved range.");
+
+  const previous = continuing ? await Bun.file(manifestPath).json() as { safe?: string; rotationIndex?: number } : undefined;
+  const safe = continuing && previous?.safe
+    ? previous.safe as `0x${string}`
+    : await deploySafeWallet();
+  const expectedIndex = continuing ? previous?.rotationIndex : 0;
+  if (expectedIndex === undefined) throw new Error("Previous E2E state is unavailable.");
+  if (continuing) loadMnemonicSigner(mnemonic, expectedIndex);
+  const before = await readSafeWallet(safe);
+  const expectedOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${expectedIndex}` }).address;
+  if (before.index !== expectedIndex || before.owner.toLowerCase() !== expectedOwner.toLowerCase()) fail("Initial Safe state mismatch.");
 
   const recipient = mnemonicToAccount(mnemonic, { path: "m/44'/60'/7331'/0/100" }).address;
-  const recipientBefore = await readSepoliaBalance(recipient);
-  const safe = await deploySafeWallet();
-  const before = await readSafeWallet(safe);
-  if (before.index !== 0 || before.owner.toLowerCase() !== setup.toLowerCase()) fail("Initial Safe state mismatch.");
-
+  const nextOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${expectedIndex + 1}` }).address;
+  const [recipientBefore, nextOwnerBefore] = await Promise.all([readSepoliaBalance(recipient), readSepoliaBalance(nextOwner)]);
   await demoSendETH(safe, recipient, parseEther("0.0001"));
   const after = await readSafeWallet(safe);
-  if (after.index !== 1 || after.owner.toLowerCase() !== mnemonicToAccount(mnemonic, { path: "m/44'/60'/7331'/0/1" }).address.toLowerCase()) fail("Owner rotation mismatch.");
-  if (await readSepoliaBalance(recipient) !== recipientBefore + parseEther("0.0001")) fail("Recipient balance mismatch.");
+  const [recipientAfter, nextOwnerAfter] = await Promise.all([readSepoliaBalance(recipient), readSepoliaBalance(nextOwner)]);
+  if (after.index !== expectedIndex + 1 || after.owner.toLowerCase() !== nextOwner.toLowerCase()) fail("Owner rotation mismatch.");
+  if (before.balance - after.balance !== parseEther("0.0011")) fail("Safe balance delta mismatch.");
+  if (recipientAfter - recipientBefore !== parseEther("0.0001")) fail("Recipient balance mismatch.");
+  if (nextOwnerAfter - nextOwnerBefore !== parseEther("0.001")) fail("Next-owner funding mismatch.");
 
   clearEphemeralBurner();
   const recovered = loadMnemonicSigner(mnemonic, after.index);
