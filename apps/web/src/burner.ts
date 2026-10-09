@@ -230,7 +230,7 @@ async function finalizeSafeWallet(safe: Address): Promise<Address> {
   return safe;
 }
 
-async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promise<Address> {
+async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash: Hex) => void): Promise<Address> {
   const current = ownerAccount();
   const { account, client } = sponsorClient();
   const startingBalance = await publicClient.getBalance({ address: account.address });
@@ -252,7 +252,7 @@ async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promis
   if (factoryReceipt.status !== "success" || !event) throw new Error("Safe proxy deployment failed.");
   const safe = event.args.proxy;
   guardAddress = guard;
-  onSafeCreated?.(safe);
+  onSafeCreated?.(safe, factoryHash);
   await waitForSafeReady(safe, current.address, guard);
   return finalizeSafeWallet(safe);
 }

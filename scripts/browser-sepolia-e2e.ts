@@ -66,6 +66,10 @@ async function main() {
       const currentStable = (await page.getByRole("button", { name: "Copy stable Safe address" }).locator("code").innerText()).trim();
       if (currentStable.toLowerCase() !== stableAddress.toLowerCase()) throw new Error("Safe address changed during rotation.");
     }
+    const explorerLink = page.getByRole("link", { name: /Sent 0\.0001 ETH on Sepolia Etherscan/ }).first();
+    await expect(explorerLink).toHaveAttribute("href", /^https:\/\/sepolia\.etherscan\.io\/tx\/0x[0-9a-f]{64}$/i);
+    await expect(explorerLink).toHaveAttribute("target", "_blank");
+    await expect(explorerLink).toHaveAttribute("rel", "noreferrer");
 
     stage = "verify-encrypted-browser-storage";
     const vault = await page.evaluate(() => localStorage.getItem("bunker-vault"));

@@ -55,6 +55,7 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   await expect(page.getByRole("status")).toContainText("Simulated locally — not broadcast");
   await expect(page.getByRole("heading", { name: "0.9999 ETH" })).toBeVisible();
   await expect(page.locator(".activity-row").first()).toContainText("Sent 0.0001 ETH");
+  await expect(page.locator(".activity a")).toHaveCount(0);
   await expect(page.getByText("Key 2", { exact: true })).toBeVisible();
   await expect(page.locator(".signer-steps .current code")).not.toHaveText(previousSigner);
   await expect(page.locator(".activity-row code").first()).toContainText(previousSigner);
