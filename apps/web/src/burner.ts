@@ -90,7 +90,15 @@ const sponsorClient = () => {
 };
 const checkedCode = async (address: Address, expected: Hex) => {
   const code = await publicClient.getCode({ address });
-  if (!code || keccak256(code) !== expected) throw new Error("Safe deployment verification failed.");
+  if (!code) throw new Error("Safe deployment is not visible yet.");
+  if (keccak256(code) !== expected) throw new Error("Safe deployment verification failed.");
+};
+const transientRead = (error: unknown) => error instanceof Error && (error.message.includes("returned no data") || error.message.includes("not visible yet"));
+const waitForSafeReady = async (safe: Address, owner: Address, guard: Address) => {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try { await attestSafe(safe, owner, guard); return; }
+    catch (error) { if (!transientRead(error) || attempt === 7) throw error; await new Promise(resolve => setTimeout(resolve, 2_000)); }
+  }
 };
 const deploy = async (abi: readonly unknown[], bytecode: Hex, args: readonly unknown[] = []) => {
   const { client } = sponsorClient();
@@ -197,6 +205,26 @@ function clearEphemeralBurner(): void {
 }
 function hasEphemeralBurner(): boolean { return privateKey !== undefined; }
 
+async function finalizeSafeWallet(safe: Address): Promise<Address> {
+  const current = ownerAccount();
+  const state = await readSafeWallet(safe);
+  if (state.owner.toLowerCase() !== current.address.toLowerCase()) throw new Error("The saved Safe is not controlled by this recovery key.");
+  if (state.balance > 0n) return safe;
+  const { account, client } = sponsorClient();
+  const [latestNonce, pendingNonce, remaining] = await Promise.all([
+    publicClient.getTransactionCount({ address: account.address, blockTag: "latest" }),
+    publicClient.getTransactionCount({ address: account.address, blockTag: "pending" }),
+    publicClient.getBalance({ address: account.address }),
+  ]);
+  if (pendingNonce > latestNonce) throw new Error("Safe funding is still confirming.");
+  const reserve = parseEther("0.006");
+  if (remaining <= reserve) throw new Error("Not enough Sepolia ETH remains to fund the Safe and broadcaster.");
+  const fundingHash = await client.sendTransaction({ to: safe, value: remaining - reserve });
+  const fundingReceipt = await publicClient.waitForTransactionReceipt({ hash: fundingHash });
+  if (fundingReceipt.status !== "success") throw new Error("Safe funding failed.");
+  return safe;
+}
+
 async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promise<Address> {
   const current = ownerAccount();
   const { account, client } = sponsorClient();
@@ -219,18 +247,12 @@ async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promis
   if (factoryReceipt.status !== "success" || !event) throw new Error("Safe proxy deployment failed.");
   const safe = event.args.proxy;
   guardAddress = guard;
-  await attestSafe(safe, current.address, guard);
   onSafeCreated?.(safe);
-  const remaining = await publicClient.getBalance({ address: account.address });
-  const reserve = parseEther("0.006");
-  if (remaining <= reserve) throw new Error("Not enough Sepolia ETH remains to fund the Safe and broadcaster.");
-  const fundingHash = await client.sendTransaction({ to: safe, value: remaining - reserve });
-  const fundingReceipt = await publicClient.waitForTransactionReceipt({ hash: fundingHash });
-  if (fundingReceipt.status !== "success") throw new Error("Safe funding failed.");
-  return safe;
+  await waitForSafeReady(safe, current.address, guard);
+  return finalizeSafeWallet(safe);
 }
 
-async function readSafeWallet(safe: Address) {
+async function readSafeWalletOnce(safe: Address) {
   const [balance, owners, guardSlot] = await Promise.all([
     publicClient.getBalance({ address: safe }),
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
@@ -246,6 +268,13 @@ async function readSafeWallet(safe: Address) {
   if (ownerIndex < 19 && committed === ZERO) throw new Error("Guard sequence verification failed.");
   return { balance, owner: owners[0]!, index: ownerIndex };
 }
+async function readSafeWallet(safe: Address) {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    try { return await readSafeWalletOnce(safe); }
+    catch (error) { if (!transientRead(error) || attempt === 7) throw error; await new Promise(resolve => setTimeout(resolve, 2_000)); }
+  }
+  throw new Error("Safe deployment is still confirming.");
+}
 async function verifyRecoverySequence(safe: Address): Promise<void> {
   if (!guardAddress || !mnemonicSecret) throw new Error("Recovery sequence is unavailable.");
   const keys = sequence();
@@ -255,7 +284,7 @@ async function verifyRecoverySequence(safe: Address): Promise<void> {
 }
 const demoSendETH = (safe: Address, to: Address, amount: bigint) => rotatedWrite(safe, to, amount);
 
-return { clearEphemeralBurner, createEphemeralBurner, demoSendETH, deploySafeWallet, hasEphemeralBurner, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence };
+return { clearEphemeralBurner, createEphemeralBurner, demoSendETH, deploySafeWallet, finalizeSafeWallet, hasEphemeralBurner, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence };
 }
 
 export async function readSepoliaBalance(address: Address): Promise<bigint> {
