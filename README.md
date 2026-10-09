@@ -49,6 +49,10 @@ Blocked today:
 
 - **Private transaction submission / protected relay:** evaluate private builder or relay submission to reduce public-mempool visibility of pending ECDSA signatures and exposed public keys during rotation. This would not hide them from the selected relay, builders or validators, or from the eventual chain, and it would not make Bunker quantum-safe. Relay trust, censorship and leakage risks, fallback behavior, and the complete integration require review and audit before this can be enabled.
 
+### Non-production Sepolia test UI
+
+`https://sepolia-test.bunker-wallet.pages.dev` enables the browser recovery, Safe deployment, and ETH-send flow for disposable Sepolia test ETH only. It is unaudited, may be reset without notice, and must never receive mainnet ETH or meaningful assets. Production at `https://bunker.supplies` keeps Sepolia controls disabled.
+
 ## Architecture
 
 ```mermaid

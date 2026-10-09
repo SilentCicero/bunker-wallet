@@ -2,7 +2,8 @@ import { chmod } from "node:fs/promises";
 import { isAddress, parseEther } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { validMnemonic } from "../packages/vault/src";
-import { clearEphemeralBurner, demoSendETH, loadMnemonicSigner, readSafeWallet, readSepoliaBalance, verifyRecoverySequence } from "../apps/web/src/burner";
+import { createBurnerSession, readSepoliaBalance } from "../apps/web/src/burner";
+const { clearEphemeralBurner, demoSendETH, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 async function main() {
   if (process.env.BUNKER_E2E_LIVE !== "1" || process.env.BUNKER_SEPOLIA_CHAIN_ID !== "11155111") throw new Error("Live Sepolia funding is disabled.");

@@ -2,7 +2,8 @@ import { chmod } from "node:fs/promises";
 import { chromium, expect } from "@playwright/test";
 import { isAddress } from "viem";
 import { generatePrivateKey, mnemonicToAccount } from "viem/accounts";
-import { readSafeWallet } from "../apps/web/src/burner";
+import { createBurnerSession } from "../apps/web/src/burner";
+const { readSafeWallet } = createBurnerSession();
 
 let stage = "startup";
 async function main() {

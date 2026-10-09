@@ -1,5 +1,6 @@
 import { parseEther } from "viem";
-import { clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, SEPOLIA_RPC, verifyRecoverySequence } from "../apps/web/src/burner";
+import { createBurnerSession, SEPOLIA_RPC } from "../apps/web/src/burner";
+const { clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 if (!SEPOLIA_RPC.includes("127.0.0.1") && !SEPOLIA_RPC.includes("localhost")) throw new Error("This smoke test must run against local Anvil.");
 const rpc = async (method: string, params: unknown[]) => {

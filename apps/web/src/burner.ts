@@ -54,13 +54,6 @@ const safeTxTypes = { SafeTx: [
   { name: "nonce", type: "uint256" },
 ] } as const;
 
-let privateKey: Hex | undefined;
-let sponsorPrivateKey: Hex | undefined;
-let mnemonicSecret: string | undefined;
-let pendingPrivateKey: Hex | undefined;
-let futurePrivateKeys: Hex[] = [];
-let ownerIndex = 0;
-let guardAddress: Address | undefined;
 const publicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC) });
 const mnemonicKey = (mnemonic: string, index: number) => {
   const key = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${index}` }).getHdKey().privateKey;
@@ -71,6 +64,14 @@ export const deriveLocalPreviewWalletAddress = (mnemonic: string): Address =>
   mnemonicToAccount(mnemonic, { path: "m/44'/60'/7331'/1'/0'" }).address;
 export const deriveLocalPreviewOwnerAddress = (mnemonic: string, index: number): Address =>
   mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/2'/${index}'` }).address;
+export function createBurnerSession() {
+let privateKey: Hex | undefined;
+let sponsorPrivateKey: Hex | undefined;
+let mnemonicSecret: string | undefined;
+let pendingPrivateKey: Hex | undefined;
+let futurePrivateKeys: Hex[] = [];
+let ownerIndex = 0;
+let guardAddress: Address | undefined;
 const ownerAccount = () => { if (!privateKey) throw new Error("Create or load a testnet key first."); return privateKeyToAccount(privateKey); };
 const sponsorClient = () => {
   if (!sponsorPrivateKey) throw new Error("The Sepolia broadcaster key is unavailable. Restore or restart setup.");
@@ -170,23 +171,23 @@ async function rotatedWrite(safe: Address, to: Address, amount: bigint): Promise
   }
 }
 
-export function createEphemeralBurner(): Address {
+function createEphemeralBurner(): Address {
   mnemonicSecret = undefined; ownerIndex = 0; privateKey = generatePrivateKey(); sponsorPrivateKey = privateKey;
   pendingPrivateKey = undefined; futurePrivateKeys = []; guardAddress = undefined;
   return privateKeyToAccount(privateKey).address;
 }
-export function loadMnemonicSigner(mnemonic: string, index = 0): Address {
+function loadMnemonicSigner(mnemonic: string, index = 0): Address {
   mnemonicSecret = mnemonic; ownerIndex = index; privateKey = mnemonicKey(mnemonic, index); sponsorPrivateKey = privateKey;
   pendingPrivateKey = undefined; futurePrivateKeys = [];
   return privateKeyToAccount(privateKey).address;
 }
-export function clearEphemeralBurner(): void {
+function clearEphemeralBurner(): void {
   privateKey = undefined; sponsorPrivateKey = undefined; pendingPrivateKey = undefined; mnemonicSecret = undefined;
   futurePrivateKeys = []; guardAddress = undefined; ownerIndex = 0;
 }
-export function hasEphemeralBurner(): boolean { return privateKey !== undefined; }
+function hasEphemeralBurner(): boolean { return privateKey !== undefined; }
 
-export async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promise<Address> {
+async function deploySafeWallet(onSafeCreated?: (safe: Address) => void): Promise<Address> {
   const current = ownerAccount();
   const { account, client } = sponsorClient();
   const startingBalance = await publicClient.getBalance({ address: account.address });
@@ -219,7 +220,7 @@ export async function deploySafeWallet(onSafeCreated?: (safe: Address) => void):
   return safe;
 }
 
-export async function readSafeWallet(safe: Address) {
+async function readSafeWallet(safe: Address) {
   const [balance, owners, guardSlot] = await Promise.all([
     publicClient.getBalance({ address: safe }),
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
@@ -235,14 +236,17 @@ export async function readSafeWallet(safe: Address) {
   if (ownerIndex < 19 && committed === ZERO) throw new Error("Guard sequence verification failed.");
   return { balance, owner: owners[0]!, index: ownerIndex };
 }
-export async function verifyRecoverySequence(safe: Address): Promise<void> {
+async function verifyRecoverySequence(safe: Address): Promise<void> {
   if (!guardAddress || !mnemonicSecret) throw new Error("Recovery sequence is unavailable.");
   const keys = sequence();
   const indexes = Array.from({ length: 20 - ownerIndex }, (_, offset) => ownerIndex + offset);
   const committed = await Promise.all(indexes.map(index => publicClient.readContract({ address: guardAddress!, abi: bunkerGuardAbi, functionName: "committedOwner", args: [safe, BigInt(index)] })));
   if (committed.some((address, offset) => address.toLowerCase() !== privateKeyToAccount(keys[indexes[offset]!]!).address.toLowerCase())) throw new Error("This recovery phrase does not match the Safe signer sequence.");
 }
-export const demoSendETH = (safe: Address, to: Address, amount: bigint) => rotatedWrite(safe, to, amount);
+const demoSendETH = (safe: Address, to: Address, amount: bigint) => rotatedWrite(safe, to, amount);
+
+return { clearEphemeralBurner, createEphemeralBurner, demoSendETH, deploySafeWallet, hasEphemeralBurner, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence };
+}
 
 export async function readSepoliaBalance(address: Address): Promise<bigint> {
   const response = await fetch(SEPOLIA_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getBalance", params: [address, "latest"] }), signal: AbortSignal.timeout(8_000) });

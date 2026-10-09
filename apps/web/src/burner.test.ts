@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
-import { clearEphemeralBurner, createEphemeralBurner, deriveLocalPreviewOwnerAddress, deriveLocalPreviewWalletAddress, hasEphemeralBurner, readSepoliaBalance, SEPOLIA_CHAIN_ID, SEPOLIA_FAUCET } from "./burner";
+import { createBurnerSession, deriveLocalPreviewOwnerAddress, deriveLocalPreviewWalletAddress, readSepoliaBalance, SEPOLIA_CHAIN_ID, SEPOLIA_FAUCET } from "./burner";
+const session=createBurnerSession();
+const {clearEphemeralBurner,createEphemeralBurner,hasEphemeralBurner}=session;
 afterEach(clearEphemeralBurner);
 test("creates a memory-only burner address and clears it", () => { expect(SEPOLIA_CHAIN_ID).toBe(11155111); const address=createEphemeralBurner(); expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/); expect(hasEphemeralBurner()).toBe(true); clearEphemeralBurner(); expect(hasEphemeralBurner()).toBe(false); });
 test("derives distinct hardened BIP-32 preview addresses from BIP-39", () => { const mnemonic=`${"abandon ".repeat(23)}art`; const wallet=deriveLocalPreviewWalletAddress(mnemonic), first=deriveLocalPreviewOwnerAddress(mnemonic,0), second=deriveLocalPreviewOwnerAddress(mnemonic,1); expect(wallet).toMatch(/^0x[0-9a-fA-F]{40}$/); expect(first).not.toBe(wallet); expect(second).not.toBe(first); expect(deriveLocalPreviewOwnerAddress(mnemonic,0)).toBe(first); });

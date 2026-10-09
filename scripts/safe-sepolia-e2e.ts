@@ -3,16 +3,8 @@ import { createPublicClient, formatEther, http, parseEther } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { validMnemonic } from "../packages/vault/src";
-import {
-  clearEphemeralBurner,
-  demoSendETH,
-  deploySafeWallet,
-  loadMnemonicSigner,
-  readSafeWallet,
-  readSepoliaBalance,
-  SEPOLIA_RPC,
-  verifyRecoverySequence,
-} from "../apps/web/src/burner";
+import { createBurnerSession, readSepoliaBalance, SEPOLIA_RPC } from "../apps/web/src/burner";
+const { clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 const fail = (message: string): never => { throw new Error(message); };
 
