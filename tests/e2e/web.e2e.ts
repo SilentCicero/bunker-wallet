@@ -80,7 +80,7 @@ test("encrypted Sepolia wallet survives refresh", async ({ page }) => {
   await page.getByRole("button", { name: "Skip check" }).click();
   const password = "browser-refresh-test-password";
   await page.getByLabel(/Password · 12 characters minimum/).fill(password);
-  await page.getByRole("button", { name: "Encrypt and continue" }).click();
+  await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
   const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault") }));
   expect(storage.keys).toEqual(["bunker-vault"]);
   expect(storage.vault).not.toContain(password);

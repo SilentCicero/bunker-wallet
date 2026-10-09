@@ -31,7 +31,7 @@ async function main() {
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Skip check" }).click();
     await page.getByLabel(/Password · 12 characters minimum/).fill(vaultPassword);
-    await page.getByRole("button", { name: "Encrypt and continue" }).click();
+    await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
     await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
     const setupAddress = (await page.locator(".setup-address code").innerText()).trim();
     if (!isAddress(setupAddress)) throw new Error("Browser setup address is invalid.");
