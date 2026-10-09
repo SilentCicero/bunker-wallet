@@ -79,7 +79,7 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   const password = "browser-refresh-test-password";
-  await expect(page.getByRole("button", { name: "Skip — session only" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Continue without password" })).toBeEnabled();
   await page.getByLabel(/Password · 12 characters minimum/).fill(password);
   await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
   const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault") }));
@@ -103,7 +103,7 @@ test("Sepolia persistence: session-only skip stores nothing", async ({ page }) =
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   await expect(page.getByText("Skipping stores no browser backup.")).toBeVisible();
-  await page.getByRole("button", { name: "Skip — session only" }).click();
+  await page.getByRole("button", { name: "Continue without password" }).click();
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "One address. Fresh keys." })).toBeVisible();
