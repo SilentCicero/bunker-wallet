@@ -1,7 +1,7 @@
 import { chmod } from "node:fs/promises";
 import { chromium, expect } from "@playwright/test";
 import { isAddress } from "viem";
-import { mnemonicToAccount } from "viem/accounts";
+import { generatePrivateKey, mnemonicToAccount } from "viem/accounts";
 import { readSafeWallet } from "../apps/web/src/burner";
 
 let stage = "startup";
@@ -12,6 +12,7 @@ async function main() {
   const url = process.env.BUNKER_BROWSER_E2E_URL ?? "http://127.0.0.1:4173";
   if (!mnemonic || !manifestPath || !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(url)) throw new Error("Browser E2E configuration is invalid.");
 
+  const vaultPassword = generatePrivateKey();
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.route("https://platform.twitter.com/**", route => route.abort());
@@ -26,7 +27,8 @@ async function main() {
     await expect(page.getByRole("heading", { name: "Write down these 24 words." })).toBeVisible();
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Skip check" }).click();
-    await page.getByRole("button", { name: "Continue without saving" }).click();
+    await page.getByLabel(/Password · 12 characters minimum/).fill(vaultPassword);
+    await page.getByRole("button", { name: "Encrypt and continue" }).click();
     await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
     const setupAddress = (await page.locator(".setup-address code").innerText()).trim();
     if (!isAddress(setupAddress)) throw new Error("Browser setup address is invalid.");
@@ -62,18 +64,38 @@ async function main() {
       if (currentStable.toLowerCase() !== stableAddress.toLowerCase()) throw new Error("Safe address changed during rotation.");
     }
 
+    stage = "verify-encrypted-browser-storage";
+    const vault = await page.evaluate(() => localStorage.getItem("bunker-vault"));
+    if (!vault) throw new Error("Encrypted browser vault was not stored.");
+    const envelope = JSON.parse(vault) as { kdf?: { name?: string }; cipher?: { name?: string; ciphertext?: string } };
+    if (envelope.kdf?.name !== "argon2id" || envelope.cipher?.name !== "AES-256-GCM" || !/^[0-9a-f]+$/.test(envelope.cipher.ciphertext ?? "") || /\b(?:[a-z]+\s+){23}[a-z]+\b/.test(vault)) throw new Error("Stored browser vault is invalid.");
+
+    stage = "reload-and-unlock-browser-vault";
+    await page.reload({ waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Setup options" }).click();
+    await page.getByRole("button", { name: /Load existing wallet/ }).click();
+    await page.getByLabel("Vault password").fill(vaultPassword);
+    await page.getByRole("button", { name: "Load wallet" }).click();
+    await expect(page.getByText("Ethereum Sepolia Safe · live")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Key 3", { exact: true })).toBeVisible();
+    const restoredStable = (await page.getByRole("button", { name: "Copy stable Safe address" }).locator("code").innerText()).trim();
+    if (restoredStable.toLowerCase() !== stableAddress.toLowerCase()) throw new Error("Restored Safe address mismatch.");
+
+    stage = "rotate-restored-browser-safe";
+    await page.getByLabel("Recipient").fill(recipient);
+    await page.getByLabel("Amount").fill("0.0001");
+    await page.getByRole("button", { name: "Send + rotate key" }).click();
+    await expect(page.getByText("Key 4", { exact: true })).toBeVisible({ timeout: 180_000 });
+
     stage = "verify-browser-safe-chain";
     const state = await readSafeWallet(stableAddress);
-    if (state.index !== 2) throw new Error("On-chain browser Safe rotation index mismatch.");
-    stage = "verify-browser-storage";
-    const storageKeys = await page.evaluate(() => Object.keys(localStorage));
-    if (storageKeys.some(key => /mnemonic|seed|phrase|vault/i.test(key))) throw new Error("Browser persisted recovery material.");
+    if (state.index !== 3) throw new Error("On-chain browser Safe rotation index mismatch.");
     stage = "verify-browser-origins";
     if (forbiddenRequests.length) throw new Error("Browser contacted an unexpected origin.");
 
     stage = "write-browser-evidence";
     const manifest = await Bun.file(manifestPath).json() as Record<string, unknown>;
-    await Bun.write(manifestPath, JSON.stringify({ ...manifest, browserLifecycleCompletedAt: new Date().toISOString(), browserLifecycleResult: "pass", browserSafe: stableAddress, browserSafeRotationIndex: state.index, browserActions: 2 }, null, 2) + "\n");
+    await Bun.write(manifestPath, JSON.stringify({ ...manifest, browserLifecycleCompletedAt: new Date().toISOString(), browserLifecycleResult: "pass", browserSafe: stableAddress, browserSafeRotationIndex: state.index, browserActions: 3, encryptedVaultRestored: true }, null, 2) + "\n");
     await chmod(manifestPath, 0o600);
     console.log("Browser Ethereum Sepolia Safe E2E passed.");
   } finally {
