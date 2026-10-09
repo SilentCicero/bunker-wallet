@@ -23,6 +23,6 @@ jobs:
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
       - name: Encrypted browser refresh recovery
-        run: BROWSER_SEPOLIA_E2E=1 VITE_BROWSER_SEPOLIA_E2E=1 bun run test:e2e --grep "encrypted Sepolia wallet survives refresh and relogin"
+        run: BROWSER_SEPOLIA_E2E=1 VITE_BROWSER_SEPOLIA_E2E=1 bun run test:e2e --grep "Sepolia persistence"
       - run: bun run release:verify
       - run: bun audit
