@@ -48,7 +48,7 @@ async function main() {
     stage = "verify-browser-funding";
     await page.getByRole("button", { name: "I funded it — check balance" }).click();
     await expect(page.getByRole("heading", { name: "Create your Safe wallet." })).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Create Safe");
+    await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Create Safe wallet");
     stage = "deploy-browser-safe";
     await page.getByRole("button", { name: "Create guarded Safe" }).click();
     await expect(page.getByText("Ethereum Sepolia Safe · live")).toBeVisible({ timeout: 300_000 });

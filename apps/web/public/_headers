@@ -1,3 +1,6 @@
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://platform.twitter.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http://127.0.0.1:* http://localhost:* https://ethereum-sepolia-rpc.publicnode.com https://ethereum-rpc.publicnode.com https://cloudflare-eth.com; frame-src https://platform.twitter.com https://twitter.com https://x.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests
   Referrer-Policy: no-referrer

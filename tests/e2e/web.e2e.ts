@@ -83,7 +83,7 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
   await page.getByRole("button", { name: "Create Wallet (Testnet)" }).click();
-  await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Back up phrase");
+  await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Back up recovery phrase");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Protect browser");
