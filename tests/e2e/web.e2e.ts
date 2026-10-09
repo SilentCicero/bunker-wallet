@@ -82,6 +82,7 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   await expect(page.getByRole("button", { name: "Continue without password" })).toBeEnabled();
   await page.getByLabel(/Password · 12 characters minimum/).fill(password);
   await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
+  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
   const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault"), session: sessionStorage.getItem("bunker-unlocked-wallet") }));
   expect(storage.keys).toEqual(["bunker-vault"]);
   expect(storage.vault).not.toContain(password);
@@ -109,6 +110,7 @@ test("Sepolia persistence: passwordless session survives refresh", async ({ page
   await page.getByRole("button", { name: "Skip check" }).click();
   await expect(page.getByText("Skipping stores no browser backup.")).toBeVisible();
   await page.getByRole("button", { name: "Continue without password" }).click();
+  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
   const storage=await page.evaluate(() => ({local:Object.keys(localStorage),session:sessionStorage.getItem("bunker-unlocked-wallet")}));
   expect(storage.local).toEqual([]);
   expect(storage.session).not.toMatch(/mnemonic|privateKey/);
