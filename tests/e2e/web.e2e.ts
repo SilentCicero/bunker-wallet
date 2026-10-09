@@ -150,6 +150,16 @@ test("Sepolia persistence: browser restart restores until Lock", async () => {
   }finally{rmSync(profile,{recursive:true,force:true})}
 });
 
+test("Sepolia persistence: migrates an open legacy tab session", async ({ page }) => {
+  test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
+  await page.goto("/");
+  await page.evaluate(async mnemonic=>{const id=crypto.randomUUID(),key=await crypto.subtle.generateKey({name:"AES-GCM",length:256},false,["encrypt","decrypt"]),nonce=crypto.getRandomValues(new Uint8Array(12)),ciphertext=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:nonce},key,new TextEncoder().encode(mnemonic))),hex=(v:Uint8Array)=>Array.from(v,b=>b.toString(16).padStart(2,"0")).join("");const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open("bunker-unlocked-session",1);request.onupgradeneeded=()=>request.result.createObjectStore("keys");request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});await new Promise<void>((resolve,reject)=>{const request=db.transaction("keys","readwrite").objectStore("keys").put(key,id);request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)});db.close();sessionStorage.setItem("bunker-unlocked-wallet",JSON.stringify({id,nonce:hex(nonce),ciphertext:hex(ciphertext),expiresAt:Date.now()+60_000}))},`${"abandon ".repeat(23)}art`);
+  await page.reload({waitUntil:"networkidle"});
+  await expect(page.getByRole("heading",{name:"Add Ethereum Sepolia test ETH."})).toBeVisible();
+  expect(await page.evaluate(()=>sessionStorage.getItem("bunker-unlocked-wallet"))).toBeNull();
+  expect(await deviceWalletData(page)).not.toMatch(/mnemonic|privateKey/);
+});
+
 test("Sepolia persistence: phrase recovery needs no password", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
