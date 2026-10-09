@@ -56,14 +56,19 @@ const safeTxTypes = { SafeTx: [
 ] } as const;
 
 const publicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC) });
-const ensClient = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
-export async function resolveRecipient(value: string): Promise<Address> {
+type EnsResolver = (name: string) => Promise<Address | null>;
+const ensResolvers: EnsResolver[] = ["https://ethereum-rpc.publicnode.com", "https://cloudflare-eth.com"].map(url => {
+  const client = createPublicClient({ chain: mainnet, transport: http(url) });
+  return name => client.getEnsAddress({ name });
+});
+export async function resolveRecipient(value: string, resolvers: EnsResolver[] = ensResolvers): Promise<Address> {
   const recipient=value.trim();
   if(isAddress(recipient))return recipient;
   if(!/^[a-z0-9-]+\.eth$/i.test(recipient))throw new Error("Enter a valid Ethereum address or .eth name.");
-  const resolved=await ensClient.getEnsAddress({name:recipient.toLowerCase()});
-  if(!resolved)throw new Error("That .eth name could not be resolved.");
-  return resolved;
+  for (const resolve of resolvers) {
+    try { const address = await resolve(recipient.toLowerCase()); if (address) return address; } catch {}
+  }
+  throw new Error("Couldn’t resolve this .eth name. Retry or paste the recipient’s 0x address.");
 }
 const mnemonicKey = (mnemonic: string, index: number) => {
   const key = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${index}` }).getHdKey().privateKey;
