@@ -76,6 +76,9 @@ async function main() {
     stage = "reload-and-unlock-browser-vault";
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
+    await page.getByLabel("Vault password").fill("wrong-browser-password");
+    await page.getByRole("button", { name: "Load wallet" }).click();
+    await expect(page.getByRole("status")).toContainText("could not be opened");
     await page.getByLabel("Vault password").fill(vaultPassword);
     await page.getByRole("button", { name: "Load wallet" }).click();
     await expect(page.getByText("Ethereum Sepolia Safe · live")).toBeVisible({ timeout: 60_000 });
