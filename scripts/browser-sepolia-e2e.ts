@@ -73,7 +73,15 @@ async function main() {
     const envelope = JSON.parse(vault) as { kdf?: { name?: string }; cipher?: { name?: string; ciphertext?: string } };
     if (envelope.kdf?.name !== "argon2id" || envelope.cipher?.name !== "AES-256-GCM" || !/^[0-9a-f]+$/.test(envelope.cipher.ciphertext ?? "") || /\b(?:[a-z]+\s+){23}[a-z]+\b/.test(vault)) throw new Error("Stored browser vault is invalid.");
 
-    stage = "reload-and-unlock-browser-vault";
+    stage = "refresh-unlocked-browser-session";
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.getByText("Ethereum Sepolia Safe · live")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText("Key 3", { exact: true })).toBeVisible();
+    const refreshedStable = (await page.getByRole("button", { name: "Copy stable Safe address" }).locator("code").innerText()).trim();
+    if (refreshedStable.toLowerCase() !== stableAddress.toLowerCase()) throw new Error("Refreshed Safe address mismatch.");
+
+    stage = "lock-and-unlock-browser-vault";
+    await page.getByRole("button", { name: "Lock" }).click();
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
     await page.getByLabel("Vault password").fill("wrong-browser-password");
