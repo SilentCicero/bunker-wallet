@@ -20,7 +20,7 @@ sequenceDiagram
 
 Working today:
 
-- faucet-free local preview by default; the Ethereum Sepolia UI remains disabled pending funded live-smoke evidence;
+- faucet-free local preview by default; the Ethereum Sepolia UI remains disabled pending independent review;
 - an ETH-send flow that atomically rotates to a fresh owner;
 - visible stable address, contract balance, rotation index and session activity;
 - polished offline-capable SolidJS PWA;
@@ -41,7 +41,7 @@ Blocked today:
 | Manual injected wallets | Disabled; proof-of-control design unresolved |
 | Offline file validation | Alpha; not offline-verified |
 | QR exchange | Deferred |
-| Ethereum Sepolia Safe | Implemented but unaudited; browser-driven deployment |
+| Ethereum Sepolia Safe | Funded deploy/send/rotate/recover smoke passed; UI disabled pending independent review |
 | Production/mainnet Safe | Disabled pending independent audit |
 | Ethereum mainnet | Runtime rejected |
 
@@ -63,7 +63,7 @@ See [architecture](docs/architecture.md), [threat model](docs/threat-model.md), 
 
 ## Storage choices
 
-**Try local preview** creates a hidden in-memory BIP-39 mnemonic and derives its stable preview address at `m/44'/60'/7331'/1'/0'` and simulated owners at fully hardened BIP-32 path `m/44'/60'/7331'/2'/index'`, with no RPC, faucet, broadcast, or persistent keys. **Ethereum Sepolia is currently disabled** pending a funded live smoke test; its implementation creates a memory-only setup key, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
+**Try local preview** creates a hidden in-memory BIP-39 mnemonic and derives its stable preview address at `m/44'/60'/7331'/1'/0'` and simulated owners at fully hardened BIP-32 path `m/44'/60'/7331'/2'/index'`, with no RPC, faucet, broadcast, or persistent keys. **Ethereum Sepolia is currently disabled** pending independent review; its implementation creates a memory-only setup key, verifies official Safe deployments, then atomically deploys and guards a Safe proxy before funding it. Refresh loses quick-setup access. Recovery-phrase setup provides deterministic owner recovery; record the Safe address alongside the phrase.
 
 **Encrypted local vault** derives a 256-bit key with Argon2id and uses a fresh AES-GCM nonce. **Seed phrase only** persists nothing and requires re-entry after reload. Neither mode protects an unlocked phrase from compromised page code, extensions, the browser, or OS. JavaScript cannot guarantee secure erasure.
 

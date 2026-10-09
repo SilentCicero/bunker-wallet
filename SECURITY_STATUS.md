@@ -24,12 +24,13 @@ Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules;
 
 Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the BIP-39/hardened-BIP-32 local preview and verifies that every Sepolia entry point remains disabled.
 
+A restricted-value Ethereum Sepolia deploy → fund → ETH send → next-owner funding → owner rotation → phrase recovery smoke passed on 2026-10-09. Its sanitized evidence is stored locally with the E2E secret rather than committed with transaction identifiers. The hosted Sepolia UI remains disabled.
+
 Still required before broader use:
 
 1. Independent audit of the setup helper, guard, browser Safe transaction builder, and recovery flow.
-2. A funded restricted-value Ethereum Sepolia deployment/action smoke test and reproducible deployment manifest.
-3. Expanded parser fuzzing, malicious recipient/reentrancy tests, and bytecode/proxy attestation tests.
-4. A reviewed sequence refill or migration protocol before the nineteenth rotation.
-5. Physical Ledger/Trezor firmware testing before hardware support claims.
+2. Expanded parser fuzzing, malicious recipient/reentrancy tests, and bytecode/proxy attestation tests.
+3. A reviewed sequence refill or migration protocol before the nineteenth rotation.
+4. Physical Ledger/Trezor firmware testing before hardware support claims.
 
 Browser encryption protects data at rest. It cannot protect a phrase while entered or unlocked from malicious page code, extensions, browser compromise, or the operating system. JavaScript cannot guarantee secure erasure.
