@@ -5,6 +5,7 @@ import {
   encodeFunctionData,
   http,
   hashTypedData,
+  isAddress,
   keccak256,
   padHex,
   parseEther,
@@ -14,7 +15,7 @@ import {
   type Hex,
 } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
-import { sepolia } from "viem/chains";
+import { mainnet, sepolia } from "viem/chains";
 import { bunkerGuardAbi, bunkerGuardBytecode, bunkerGuardRuntimeHash, bunkerSetupAbi, bunkerSetupBytecode, safeProxyRuntimeHash } from "./safeArtifacts";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
@@ -55,6 +56,15 @@ const safeTxTypes = { SafeTx: [
 ] } as const;
 
 const publicClient = createPublicClient({ chain: sepolia, transport: http(SEPOLIA_RPC) });
+const ensClient = createPublicClient({ chain: mainnet, transport: http("https://ethereum-rpc.publicnode.com") });
+export async function resolveRecipient(value: string): Promise<Address> {
+  const recipient=value.trim();
+  if(isAddress(recipient))return recipient;
+  if(!/^[a-z0-9-]+\.eth$/i.test(recipient))throw new Error("Enter a valid Ethereum address or .eth name.");
+  const resolved=await ensClient.getEnsAddress({name:recipient.toLowerCase()});
+  if(!resolved)throw new Error("That .eth name could not be resolved.");
+  return resolved;
+}
 const mnemonicKey = (mnemonic: string, index: number) => {
   const key = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${index}` }).getHdKey().privateKey;
   if (!key) throw new Error("Recovery key could not be derived.");
