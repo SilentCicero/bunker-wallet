@@ -83,13 +83,16 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
   await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
+  await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Back up phrase");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
+  await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Protect browser");
   const password = "browser-refresh-test-password";
   await expect(page.getByRole("button", { name: "Continue without password" })).toBeEnabled();
   await page.getByLabel(/Password · 12 characters minimum/).fill(password);
   await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
+  await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Fund setup key");
   const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault") }));
   const device=await deviceWalletData(page);
   expect(storage.keys).toEqual(["bunker-vault"]);
