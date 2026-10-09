@@ -11,7 +11,7 @@ const Icon=()=><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14a5 5 0 
 export default function App(){
  let secretMnemonic:string|undefined;
  const wipe=()=>{secretMnemonic=undefined};
- const browserSepoliaE2E=import.meta.env.VITE_BROWSER_SEPOLIA_E2E==="1";
+ const browserSepoliaE2E=import.meta.env.VITE_BROWSER_SEPOLIA_E2E==="1"&&["localhost","127.0.0.1","sepolia-test.bunker-wallet.pages.dev"].includes(window.location.hostname);
  const {clearEphemeralBurner,createEphemeralBurner,demoSendETH,deploySafeWallet,loadMnemonicSigner,readSafeWallet,verifyRecoverySequence}=createBurnerSession();
  const [view,setView]=createSignal<View>("landing"),[theme,setTheme]=createSignal<"light"|"dark">("light"),[setupAddress,setSetupAddress]=createSignal<Address>(),[setupBalance,setSetupBalance]=createSignal(0n),[walletAddress,setWalletAddress]=createSignal<Address>(),[walletBalance,setWalletBalance]=createSignal(0n),[owner,setOwner]=createSignal<Address>(),[rotation,setRotation]=createSignal(0),[busy,setBusy]=createSignal(""),[notice,setNotice]=createSignal(""),[activity,setActivity]=createSignal<Activity[]>([]),[confirmed,setConfirmed]=createSignal(false),[recoverable,setRecoverable]=createSignal(false),[mode,setMode]=createSignal<"local"|"sepolia">("local"),[nextSigner,setNextSigner]=createSignal<Address>();
  let phraseList!:HTMLOListElement,restore!:HTMLTextAreaElement,password!:HTMLInputElement,to!:HTMLInputElement,amount!:HTMLInputElement,walletInput!:HTMLInputElement;let confirmInputs:HTMLInputElement[]=[];

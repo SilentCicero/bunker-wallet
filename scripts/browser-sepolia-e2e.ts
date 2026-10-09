@@ -11,7 +11,9 @@ async function main() {
   const mnemonic = process.env.BUNKER_SEPOLIA_MNEMONIC;
   const manifestPath = process.env.BUNKER_SEPOLIA_MANIFEST;
   const url = process.env.BUNKER_BROWSER_E2E_URL ?? "http://127.0.0.1:4173";
-  if (!mnemonic || !manifestPath || !/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(url)) throw new Error("Browser E2E configuration is invalid.");
+  const localUrl=/^http:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?$/.test(url);
+  const publicTestUrl=url==="https://sepolia-test.bunker-wallet.pages.dev"&&process.env.BUNKER_BROWSER_E2E_PUBLIC==="1";
+  if (!mnemonic || !manifestPath || (!localUrl&&!publicTestUrl)) throw new Error("Browser E2E configuration is invalid.");
 
   const vaultPassword = generatePrivateKey();
   const browser = await chromium.launch();
