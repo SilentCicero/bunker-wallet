@@ -33,4 +33,4 @@ Still required before broader use:
 3. A reviewed sequence refill or migration protocol before the nineteenth rotation.
 4. Physical Ledger/Trezor firmware testing before hardware support claims.
 
-Browser encryption protects data at rest. A same-tab unlocked session may survive refresh for up to eight hours using session ciphertext and a non-extractable WebCrypto key. Locking, session closure, expiry, or cleared site data requires the vault password or recovery phrase again. There is no recovery backend. This cannot protect an entered or unlocked phrase from malicious same-origin code, extensions, browser compromise, or the operating system. JavaScript cannot guarantee secure erasure.
+Browser encryption protects data at rest. A saved wallet survives refreshes and browser restarts using AES-GCM ciphertext and a non-extractable WebCrypto key in IndexedDB. Locking or cleared site data requires the vault password or recovery phrase again. There is no recovery backend. This cannot protect an entered or unlocked phrase from malicious same-origin code, extensions, browser compromise, or the operating system. JavaScript cannot guarantee secure erasure.

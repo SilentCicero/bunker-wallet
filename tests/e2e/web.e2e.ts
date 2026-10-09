@@ -1,5 +1,10 @@
-import { mkdirSync } from "node:fs";
-import { expect, test } from "@playwright/test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { chromium, expect, test, type Page } from "@playwright/test";
+
+const deviceWalletData=(page:Page)=>page.evaluate(()=>new Promise<string>((resolve,reject)=>{const request=indexedDB.open("bunker-unlocked-session",1);request.onsuccess=()=>{const db=request.result,get=db.transaction("keys").objectStore("keys").getAll();get.onsuccess=()=>{db.close();resolve(JSON.stringify(get.result))};get.onerror=()=>reject(get.error)};request.onerror=()=>reject(request.error)}));
+const clearDeviceWallet=(page:Page)=>page.evaluate(()=>new Promise<void>((resolve,reject)=>{const request=indexedDB.deleteDatabase("bunker-unlocked-session");request.onsuccess=()=>resolve();request.onerror=()=>reject(request.error)}));
 
 const views = [
   ["desktop", 1440, 900],
@@ -84,15 +89,16 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   await page.getByLabel(/Password · 12 characters minimum/).fill(password);
   await page.getByRole("button", { name: /Encrypt and (?:continue|save this browser)/ }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
-  const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault"), session: sessionStorage.getItem("bunker-unlocked-wallet") }));
+  const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault") }));
+  const device=await deviceWalletData(page);
   expect(storage.keys).toEqual(["bunker-vault"]);
   expect(storage.vault).not.toContain(password);
   expect(storage.vault).not.toMatch(/mnemonic|privateKey/);
-  expect(storage.session).not.toContain(password);
-  expect(storage.session).not.toMatch(/mnemonic|privateKey/);
+  expect(device).not.toContain(password);
+  expect(device).not.toMatch(/mnemonic|privateKey/);
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
-  await page.evaluate(() => sessionStorage.clear());
+  await clearDeviceWallet(page);
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "Resume or recover." })).toBeVisible();
   const newWalletPage=await page.context().newPage();
@@ -108,20 +114,40 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
 });
 
-test("Sepolia persistence: passwordless session survives refresh", async ({ page }) => {
+test("Sepolia persistence: passwordless wallet survives tab closure", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
   await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
-  await expect(page.getByText("Skipping stores no browser backup.")).toBeVisible();
+  await expect(page.getByText(/non-extractable device key/)).toBeVisible();
   await page.getByRole("button", { name: "Continue without password" }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
-  const storage=await page.evaluate(() => ({local:Object.keys(localStorage),session:sessionStorage.getItem("bunker-unlocked-wallet")}));
-  expect(storage.local).toEqual([]);
-  expect(storage.session).not.toMatch(/mnemonic|privateKey/);
-  await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+  expect(await deviceWalletData(page)).not.toMatch(/mnemonic|privateKey/);
+  const context=page.context();await page.close();const reopened=await context.newPage();
+  await reopened.goto("/");
+  await expect(reopened.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
+});
+
+test("Sepolia persistence: browser restart restores until Lock", async () => {
+  test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
+  const profile=mkdtempSync(join(tmpdir(),"bunker-profile-"));
+  try{
+    let context=await chromium.launchPersistentContext(profile,{serviceWorkers:"block"}),page=await context.newPage();
+    await page.goto("http://127.0.0.1:4173");
+    await page.getByRole("button",{name:"Create Sepolia Wallet"}).click();
+    await page.getByRole("checkbox").check();await page.getByRole("button",{name:"Skip check"}).click();
+    await page.getByRole("button",{name:"Continue without password"}).click();
+    await expect(page.getByRole("heading",{name:"Add Ethereum Sepolia test ETH."})).toBeVisible();
+    await context.close();
+    context=await chromium.launchPersistentContext(profile,{serviceWorkers:"block"});page=context.pages()[0]??await context.newPage();await page.goto("http://127.0.0.1:4173");
+    await expect(page.getByRole("heading",{name:"Add Ethereum Sepolia test ETH."})).toBeVisible();
+    await page.getByRole("button",{name:"Lock"}).click();await expect(page.getByRole("heading",{name:"One address. Fresh keys."})).toBeVisible();
+    expect(await deviceWalletData(page)).toBe("[]");await context.close();
+    context=await chromium.launchPersistentContext(profile,{serviceWorkers:"block"});page=context.pages()[0]??await context.newPage();await page.goto("http://127.0.0.1:4173");
+    await expect(page.getByRole("heading",{name:"One address. Fresh keys."})).toBeVisible();await context.close();
+  }finally{rmSync(profile,{recursive:true,force:true})}
 });
 
 test("Sepolia persistence: phrase recovery needs no password", async ({ page }) => {
