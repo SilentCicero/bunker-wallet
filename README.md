@@ -51,7 +51,7 @@ Blocked today:
 
 ### Non-production Sepolia test UI
 
-`https://sepolia-test.bunker-wallet.pages.dev` enables the browser recovery, Safe deployment, and ETH-send flow for disposable Sepolia test ETH only. It is unaudited, may be reset without notice, and must never receive mainnet ETH or meaningful assets. Production at `https://bunker.supplies` keeps Sepolia controls disabled.
+`https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev` enable browser recovery, Safe deployment, and ETH-only sends for disposable Sepolia test ETH. The flow is unaudited, may be reset without notice, and must never receive mainnet ETH or meaningful assets. Ethereum mainnet remains disabled.
 
 ## Architecture
 
