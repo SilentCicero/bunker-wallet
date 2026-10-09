@@ -93,12 +93,17 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
   await page.evaluate(() => sessionStorage.clear());
   await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Resume or recover." })).toBeVisible();
+  const newWalletPage=await page.context().newPage();
+  await newWalletPage.goto("/");
+  await newWalletPage.getByRole("button", { name: "Create new wallet" }).click();
+  await expect(newWalletPage.getByRole("heading", { name: "Write down these 24 words." })).toBeVisible();
+  await newWalletPage.close();
   await page.getByLabel("Vault password").fill("wrong-browser-password");
-  await page.getByRole("button", { name: "Load wallet" }).click();
+  await page.getByRole("button", { name: "Unlock saved wallet" }).click();
   await expect(page.getByRole("status")).toContainText("could not be opened");
   await page.getByLabel("Vault password").fill(password);
-  await page.getByRole("button", { name: "Load wallet" }).click();
+  await page.getByRole("button", { name: "Unlock saved wallet" }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
 });
 
@@ -115,6 +120,16 @@ test("Sepolia persistence: passwordless session survives refresh", async ({ page
   expect(storage.local).toEqual([]);
   expect(storage.session).not.toMatch(/mnemonic|privateKey/);
   await page.reload({ waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
+});
+
+test("Sepolia persistence: phrase recovery needs no password", async ({ page }) => {
+  test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup options" }).click();
+  await page.getByRole("button", { name: /Load existing wallet/ }).click();
+  await page.getByLabel("Recovery phrase").fill(`${"abandon ".repeat(23)}art`);
+  await page.getByRole("button", { name: "Recover with phrase" }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
 });
 

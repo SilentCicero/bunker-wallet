@@ -83,12 +83,12 @@ async function main() {
     stage = "lock-and-unlock-browser-vault";
     await page.getByRole("button", { name: "Lock" }).click();
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Resume or recover." })).toBeVisible();
     await page.getByLabel("Vault password").fill("wrong-browser-password");
-    await page.getByRole("button", { name: "Load wallet" }).click();
+    await page.getByRole("button", { name: "Unlock saved wallet" }).click();
     await expect(page.getByRole("status")).toContainText("could not be opened");
     await page.getByLabel("Vault password").fill(vaultPassword);
-    await page.getByRole("button", { name: "Load wallet" }).click();
+    await page.getByRole("button", { name: "Unlock saved wallet" }).click();
     await expect(page.getByText("Ethereum Sepolia Safe · live")).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText("Key 3", { exact: true })).toBeVisible();
     const restoredStable = (await page.getByRole("button", { name: "Copy stable Safe address" }).locator("code").innerText()).trim();
