@@ -25,7 +25,7 @@ for (const [name, width, height] of views) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
     await expect(page.getByRole("heading", { name: /One address.*Fresh keys/s })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Try it" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try It (Simulation)" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Use Ethereum Sepolia (Soon)" })).toBeDisabled();
     await expect(page.getByText(/reducing exposure to future quantum attacks/)).toBeVisible();
     await expect(page.getByText("Rotate the keys.")).toBeVisible();
@@ -45,7 +45,7 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   const blockchainRequests: string[] = [];
   page.on("request", request => { if (/ethereum-sepolia-rpc|cloud\.google\.com\/application\/web3\/faucet/.test(request.url())) blockchainRequests.push(request.url()); });
   await page.goto("/");
-  await page.getByRole("button", { name: "Try it" }).first().click();
+  await page.getByRole("button", { name: "Try It (Simulation)" }).first().click();
   await expect(page.getByText("Local preview · simulated, not broadcast")).toBeVisible();
   await expect(page.getByText(/BIP-39 → hardened BIP-32/)).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).every(key => !/mnemonic|seed|phrase/i.test(key)))).toBe(true);
@@ -82,7 +82,7 @@ test("Ethereum Sepolia remains disabled", async ({ page }) => {
 test("Sepolia persistence: encrypted wallet survives refresh and relogin", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
-  await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
+  await page.getByRole("button", { name: "Create Wallet (Testnet)" }).click();
   await expect(page.locator('.stepper [aria-current="step"]')).toContainText("Back up phrase");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
@@ -121,7 +121,7 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
 test("Sepolia persistence: passwordless wallet survives tab closure", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
-  await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
+  await page.getByRole("button", { name: "Create Wallet (Testnet)" }).click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   await expect(page.getByText(/non-extractable device key/)).toBeVisible();
@@ -140,7 +140,7 @@ test("Sepolia persistence: browser restart restores until Lock", async () => {
   try{
     let context=await chromium.launchPersistentContext(profile,{serviceWorkers:"block"}),page=await context.newPage();
     await page.goto("http://127.0.0.1:4173");
-    await page.getByRole("button",{name:"Create Sepolia Wallet"}).click();
+    await page.getByRole("button",{name:"Create Wallet (Testnet)"}).click();
     await page.getByRole("checkbox").check();await page.getByRole("button",{name:"Skip check"}).click();
     await page.getByRole("button",{name:"Continue without password"}).click();
     await expect(page.getByRole("heading",{name:"Add Ethereum Sepolia test ETH."})).toBeVisible();
