@@ -1,0 +1,13 @@
+import{afterAll,beforeAll,expect,test}from"bun:test";
+import{createComponent,type Component}from"solid-js";
+import{renderToString}from"solid-js/web";
+import{createServer,type ViteDevServer}from"vite";
+import solid from"vite-plugin-solid";
+import type{Activity}from"./activity";
+let server:ViteDevServer,HistoryEntry:Component<{item:Activity;rotation:number}>;
+beforeAll(async()=>{server=await createServer({configFile:false,plugins:[solid({ssr:true})],root:new URL("..",import.meta.url).pathname,server:{middlewareMode:true},appType:"custom"});HistoryEntry=(await server.ssrLoadModule("/src/HistoryEntry.tsx")).HistoryEntry});
+afterAll(()=>server.close());
+const hash=`0x${"ab".repeat(32)}`,render=(item:Activity)=>renderToString(()=>createComponent(HistoryEntry,{item,rotation:1}));
+test("renders a linked atomic rotation",()=>{const html=render({label:"Sent 0.0001 ETH",hash,kind:"rotation",index:1});expect(html).toContain(`href="https://sepolia.etherscan.io/tx/${hash}"`);expect(html).toContain('target="_blank"');expect(html).toContain('rel="noreferrer"');expect(html).toContain("Sends ETH and advances the Safe owner atomically.")});
+test("renders deployment-only copy",()=>expect(render({label:"Safe proxy created",hash,kind:"deployment",index:0})).toContain("Creates the Safe proxy; it does not send ETH or rotate the owner."));
+test("renders simulated history without an anchor",()=>{const html=render({label:"Preview",index:0});expect(html).not.toContain("<a");expect(html).toContain("Preview")});
