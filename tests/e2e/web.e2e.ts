@@ -76,7 +76,7 @@ test("Ethereum Sepolia remains disabled", async ({ page }) => {
 test("Sepolia persistence: encrypted wallet survives refresh and relogin", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
-  await page.getByRole("button", { name: "Create recoverable Sepolia wallet" }).click();
+  await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   const password = "browser-refresh-test-password";
@@ -111,7 +111,7 @@ test("Sepolia persistence: encrypted wallet survives refresh and relogin", async
 test("Sepolia persistence: passwordless session survives refresh", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
-  await page.getByRole("button", { name: "Create recoverable Sepolia wallet" }).click();
+  await page.getByRole("button", { name: "Create Sepolia Wallet" }).click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Skip check" }).click();
   await expect(page.getByText("Skipping stores no browser backup.")).toBeVisible();
