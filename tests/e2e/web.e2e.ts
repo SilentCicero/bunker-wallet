@@ -72,7 +72,7 @@ test("Ethereum Sepolia remains disabled", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Load existing wallet/ })).toBeDisabled();
 });
 
-test("encrypted Sepolia wallet survives refresh", async ({ page }) => {
+test("encrypted Sepolia wallet survives refresh and relogin", async ({ page }) => {
   test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
   await page.goto("/");
   await page.getByRole("button", { name: "Create recoverable Sepolia wallet" }).click();
@@ -87,6 +87,9 @@ test("encrypted Sepolia wallet survives refresh", async ({ page }) => {
   expect(storage.vault).not.toMatch(/mnemonic|privateKey/);
   await page.reload({ waitUntil: "networkidle" });
   await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
+  await page.getByLabel("Vault password").fill("wrong-browser-password");
+  await page.getByRole("button", { name: "Load wallet" }).click();
+  await expect(page.getByRole("status")).toContainText("could not be opened");
   await page.getByLabel("Vault password").fill(password);
   await page.getByRole("button", { name: "Load wallet" }).click();
   await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
