@@ -72,6 +72,26 @@ test("Ethereum Sepolia remains disabled", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Load existing wallet/ })).toBeDisabled();
 });
 
+test("encrypted Sepolia wallet survives refresh", async ({ page }) => {
+  test.skip(process.env.BROWSER_SEPOLIA_E2E !== "1");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create recoverable Sepolia wallet" }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Skip check" }).click();
+  const password = "browser-refresh-test-password";
+  await page.getByLabel(/Password · 12 characters minimum/).fill(password);
+  await page.getByRole("button", { name: "Encrypt and continue" }).click();
+  const storage = await page.evaluate(() => ({ keys: Object.keys(localStorage), vault: localStorage.getItem("bunker-vault") }));
+  expect(storage.keys).toEqual(["bunker-vault"]);
+  expect(storage.vault).not.toContain(password);
+  expect(storage.vault).not.toMatch(/mnemonic|privateKey/);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", { name: "Load wallet." })).toBeVisible();
+  await page.getByLabel("Vault password").fill(password);
+  await page.getByRole("button", { name: "Load wallet" }).click();
+  await expect(page.getByRole("heading", { name: "Add Ethereum Sepolia test ETH." })).toBeVisible();
+});
+
 test("X post loads automatically", async ({ page }) => {
   let widgetRequests = 0;
   page.on("request", request => { if (request.url()==="https://platform.twitter.com/widgets.js") widgetRequests++; });
