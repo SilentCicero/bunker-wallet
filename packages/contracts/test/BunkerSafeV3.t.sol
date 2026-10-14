@@ -18,8 +18,23 @@ interface Vm {
     function etch(address target, bytes calldata code) external;
 }
 
-contract RevertingReceiver { receive() external payable { revert(); } }
-contract V3Target { uint256 public value; function set(uint256 next) external { value = next; } function fail() external pure { revert(); } }
+contract RevertingReceiver {
+    receive() external payable {
+        revert();
+    }
+}
+
+contract V3Target {
+    uint256 public value;
+
+    function set(uint256 next) external {
+        value = next;
+    }
+
+    function fail() external pure {
+        revert();
+    }
+}
 
 contract BunkerSafeV3Test {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
@@ -48,7 +63,9 @@ contract BunkerSafeV3Test {
         address[] memory owners = new address[](1);
         owners[0] = vm.addr(ownerKey);
         bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(guard), futureOwners));
-        bytes memory initializer = abi.encodeCall(Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0))));
+        bytes memory initializer = abi.encodeCall(
+            Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0)))
+        );
         SafeProxy proxy = factory.createChainSpecificProxyWithNonce(address(singleton), initializer, 1);
         safe = Safe(payable(address(proxy)));
         vm.deal(address(safe), 100 ether);
@@ -60,7 +77,8 @@ contract BunkerSafeV3Test {
 
     function _execute(uint256 signerKey, address recipient, uint256 amount, address nextOwner) private returns (bool) {
         address current = vm.addr(signerKey);
-        bytes memory swapData = abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, current, nextOwner);
+        bytes memory swapData =
+            abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, current, nextOwner);
         bytes memory transactions = bytes.concat(
             _packedCall(recipient, amount, ""),
             _packedCall(nextOwner, 0.001 ether, ""),
@@ -68,9 +86,22 @@ contract BunkerSafeV3Test {
         );
         bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
         uint256 nonce = safe.nonce();
-        bytes32 txHash = safe.getTransactionHash(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), nonce);
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), nonce
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, txHash);
-        return safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
+        return safe.execTransaction(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            abi.encodePacked(r, s, v)
+        );
     }
 
     function testRejectsUnpinnedMultiSendCodeHash() public {
@@ -85,19 +116,25 @@ contract BunkerSafeV3Test {
         address[] memory owners = new address[](1);
         owners[0] = vm.addr(ownerKey);
         bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(secondGuard), invalidOwners));
-        bytes memory initializer = abi.encodeCall(Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0))));
+        bytes memory initializer = abi.encodeCall(
+            Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0)))
+        );
         vm.expectRevert();
         factory.createChainSpecificProxyWithNonce(address(singleton), initializer, 2);
     }
 
-    function executeForTest(uint256 signerKey, address recipient, uint256 amount, address nextOwner) external returns (bool) {
+    function executeForTest(uint256 signerKey, address recipient, uint256 amount, address nextOwner)
+        external
+        returns (bool)
+    {
         require(msg.sender == address(this), "self only");
         return _execute(signerKey, recipient, amount, nextOwner);
     }
 
     function testRecipientFailureRollsBackOwnerAndGuardIndex() public {
         RevertingReceiver recipient = new RevertingReceiver();
-        (bool ok,) = address(this).call(abi.encodeCall(this.executeForTest, (ownerKey, address(recipient), 1 ether, futureOwners[0])));
+        (bool ok,) = address(this)
+            .call(abi.encodeCall(this.executeForTest, (ownerKey, address(recipient), 1 ether, futureOwners[0])));
         require(!ok, "recipient failure accepted");
         address[] memory owners = safe.getOwners();
         require(owners.length == 1 && owners[0] == vm.addr(ownerKey), "owner changed");
@@ -122,86 +159,274 @@ contract BunkerSafeV3Test {
 
     function testRejectsMissingNextOwnerFunding() public {
         address recipient = vm.addr(778);
-        bytes memory swapData = abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]);
-        bytes memory transactions = bytes.concat(_packedCall(recipient, 1 ether, ""), _packedCall(address(safe), 0, swapData));
+        bytes memory swapData =
+            abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]);
+        bytes memory transactions =
+            bytes.concat(_packedCall(recipient, 1 ether, ""), _packedCall(address(safe), 0, swapData));
         bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
-        bytes32 txHash = safe.getTransactionHash(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), safe.nonce());
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, txHash);
         vm.expectRevert();
-        safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
+        safe.execTransaction(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            abi.encodePacked(r, s, v)
+        );
     }
 
     function testRejectsWrongNextOwnerFundingAmount() public {
         address recipient = vm.addr(779);
-        bytes memory swapData = abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]);
+        bytes memory swapData =
+            abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]);
         bytes memory transactions = bytes.concat(
             _packedCall(recipient, 1 ether, ""),
             _packedCall(futureOwners[0], 0.002 ether, ""),
             _packedCall(address(safe), 0, swapData)
         );
         bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
-        bytes32 txHash = safe.getTransactionHash(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), safe.nonce());
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, txHash);
         vm.expectRevert();
-        safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
+        safe.execTransaction(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            abi.encodePacked(r, s, v)
+        );
     }
 
     function _batch(bytes memory transactions, bool reject) private returns (bool) {
         bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
-        bytes32 txHash = safe.getTransactionHash(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), safe.nonce());
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, txHash);
         if (reject) vm.expectRevert();
-        return safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
+        return safe.execTransaction(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            abi.encodePacked(r, s, v)
+        );
     }
 
     function _suffix() private returns (bytes memory) {
-        return bytes.concat(_packedCall(futureOwners[0], 0.001 ether, ""),
-            _packedCall(address(safe), 0, abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0])));
+        return bytes.concat(
+            _packedCall(futureOwners[0], 0.001 ether, ""),
+            _packedCall(
+                address(safe),
+                0,
+                abi.encodeWithSignature(
+                    "swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]
+                )
+            )
+        );
     }
 
     function testMultipleCallsAndCalldataRotateAtomically() public {
         V3Target target = new V3Target();
         address recipient = vm.addr(777);
-        require(_batch(bytes.concat(_packedCall(address(target), 0, abi.encodeCall(V3Target.set, (42))),
-            _packedCall(recipient, 1 ether, ""), _suffix()), false));
+        require(
+            _batch(
+                bytes.concat(
+                    _packedCall(address(target), 0, abi.encodeCall(V3Target.set, (42))),
+                    _packedCall(recipient, 1 ether, ""),
+                    _suffix()
+                ),
+                false
+            )
+        );
         require(target.value() == 42 && recipient.balance == 1 ether && safe.getOwners()[0] == futureOwners[0]);
-        (,uint8 index,,) = guard.state(address(safe));require(index == 1);
+        (, uint8 index,,) = guard.state(address(safe));
+        require(index == 1);
+    }
+
+    function testEightExternalCallsAndRotation() public {
+        bytes memory calls;
+        for (uint256 i; i < 8; ++i) {
+            calls = bytes.concat(calls, _packedCall(address(0xFEED), 0, hex"1234"));
+        }
+        require(_batch(bytes.concat(calls, _suffix()), false), "eight calls rejected");
+        require(safe.getOwners()[0] == futureOwners[0], "owner did not rotate");
+    }
+
+    function testFuzzRejectsInvalidExternalCallCount(uint8 requested) public {
+        uint256 count = uint256(requested) % 11;
+        if (count >= 1 && count <= 8) return;
+
+        bytes memory calls;
+        for (uint256 i; i < count; ++i) {
+            calls = bytes.concat(calls, _packedCall(address(0xFEED), 0, hex"1234"));
+        }
+        _batch(bytes.concat(calls, _suffix()), true);
+        require(safe.nonce() == 0, "invalid count changed nonce");
+    }
+
+    function testFuzzRejectsMalformedLengthsAndFunding(uint256 length, uint96 funding) public {
+        bytes memory entry = _packedCall(address(0xFEED), 0, hex"1234");
+        if (length == 2) length = type(uint256).max;
+        assembly {
+            mstore(add(entry, 0x55), length) // MultiSend entry data-length word, offset 53.
+        }
+        _batch(bytes.concat(entry, _suffix()), true);
+        if (funding == 0.001 ether) return;
+        bytes memory swapData =
+            abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(ownerKey), futureOwners[0]);
+        bytes memory wrongFunding = bytes.concat(
+            _packedCall(address(0xFEED), 0, hex"1234"),
+            _packedCall(futureOwners[0], funding, ""),
+            _packedCall(address(safe), 0, swapData)
+        );
+        _batch(wrongFunding, true);
+        require(safe.nonce() == 0, "malformed batch changed nonce");
+    }
+
+    function testRejectsOverflowedOuterBatchLengthWithoutStateChanges() public {
+        bytes memory transactions = bytes.concat(_packedCall(address(0xFEED), 0, hex"1234"), _suffix());
+        bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
+        assembly {
+            mstore(add(data, 0x44), not(0)) // ABI bytes length at selector + offset + 32.
+        }
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, txHash);
+        vm.expectRevert();
+        _execSigned(data, abi.encodePacked(r, s, v));
+        require(safe.nonce() == 0, "overflow changed nonce");
+        (, uint8 index,, bool executing) = guard.state(address(safe));
+        require(index == 0 && !executing, "overflow changed guard");
     }
 
     function testRevertingCallKeepsOwnerAndContractState() public {
         V3Target target = new V3Target();
-        _batch(bytes.concat(_packedCall(address(target), 0, abi.encodeCall(V3Target.set, (42))),
-            _packedCall(address(target), 0, abi.encodeCall(V3Target.fail, ())), _suffix()), true);
+        _batch(
+            bytes.concat(
+                _packedCall(address(target), 0, abi.encodeCall(V3Target.set, (42))),
+                _packedCall(address(target), 0, abi.encodeCall(V3Target.fail, ())),
+                _suffix()
+            ),
+            true
+        );
         require(target.value() == 0 && safe.getOwners()[0] == vm.addr(ownerKey));
-        (,uint8 index,,) = guard.state(address(safe));require(index == 0);
+        (, uint8 index,,) = guard.state(address(safe));
+        require(index == 0);
     }
 
     function testRejectsPrivilegedTargetsAndDelegatecall() public {
-        for(uint256 i; i<5; ++i){
-            address to = i==0?address(safe):i==1?address(guard):i==2?address(multiSend):i==3?0x41675C099F32341bf84BFc5382aF534df5C7461a:0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
+        for (uint256 i; i < 5; ++i) {
+            address to = i == 0
+                ? address(safe)
+                : i == 1
+                    ? address(guard)
+                    : i == 2
+                        ? address(multiSend)
+                        : i == 3
+                            ? 0x41675C099F32341bf84BFc5382aF534df5C7461a
+                            : 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
             _batch(bytes.concat(_packedCall(to, 0, hex"1234"), _suffix()), true);
         }
-        bytes memory delegate = bytes.concat(_packedCall(address(0xFEED), 0, ""), _suffix());delegate[0]=0x01;
-        _batch(delegate,true);
+        bytes memory delegate = bytes.concat(_packedCall(address(0xFEED), 0, ""), _suffix());
+        delegate[0] = 0x01;
+        _batch(delegate, true);
     }
 
-    function _execSigned(bytes memory data,bytes memory sig) private returns(bool){
-        return safe.execTransaction(address(multiSend),0,data,Enum.Operation.DelegateCall,0,0,0,address(0),payable(address(0)),sig);
+    function _execSigned(bytes memory data, bytes memory sig) private returns (bool) {
+        return safe.execTransaction(
+            address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), sig
+        );
     }
 
     function testMalformedSignatureReplayAndChangedDependencyFailClosed() public {
-        bytes memory data=abi.encodeCall(MultiSendCallOnly.multiSend,bytes.concat(_packedCall(address(0xFEED),1,""),_suffix()));
-        bytes32 txHash=safe.getTransactionHash(address(multiSend),0,data,Enum.Operation.DelegateCall,0,0,0,address(0),payable(address(0)),safe.nonce());
-        (uint8 v,bytes32 r,bytes32 s)=vm.sign(ownerKey,txHash);
-        vm.expectRevert();_execSigned(data,abi.encodePacked(r,s,bytes1(0x00)));
-        vm.expectRevert();_execSigned(data,abi.encodePacked(r,s));
-        require(safe.nonce()==0,"invalid signature changed nonce");
-        bytes memory original=address(multiSend).code;vm.etch(address(multiSend),hex"00");
-        vm.expectRevert();_execSigned(data,abi.encodePacked(r,s,v));
-        vm.etch(address(multiSend),original);
-        require(_execSigned(data,abi.encodePacked(r,s,v)));
-        vm.expectRevert();_execSigned(data,abi.encodePacked(r,s,v));
-        (,uint8 index,,bool executing)=guard.state(address(safe));require(index==1&&!executing&&safe.getOwners()[0]==futureOwners[0]);
+        bytes memory data =
+            abi.encodeCall(MultiSendCallOnly.multiSend, bytes.concat(_packedCall(address(0xFEED), 1, ""), _suffix()));
+        bytes32 txHash = safe.getTransactionHash(
+            address(multiSend),
+            0,
+            data,
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            safe.nonce()
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerKey, txHash);
+        vm.expectRevert();
+        _execSigned(data, abi.encodePacked(r, s, bytes1(0x00)));
+        vm.expectRevert();
+        _execSigned(data, abi.encodePacked(r, s));
+        require(safe.nonce() == 0, "invalid signature changed nonce");
+        bytes memory original = address(multiSend).code;
+        vm.etch(address(multiSend), hex"00");
+        vm.expectRevert();
+        _execSigned(data, abi.encodePacked(r, s, v));
+        vm.etch(address(multiSend), original);
+        require(_execSigned(data, abi.encodePacked(r, s, v)));
+        vm.expectRevert();
+        _execSigned(data, abi.encodePacked(r, s, v));
+        (, uint8 index,, bool executing) = guard.state(address(safe));
+        require(index == 1 && !executing && safe.getOwners()[0] == futureOwners[0]);
     }
 
     function testSequenceExhaustionIsExplicit() public {
@@ -214,6 +439,18 @@ contract BunkerSafeV3Test {
         require(guard.rotationsRemaining(address(safe)) == 0, "remaining");
         vm.prank(address(safe));
         vm.expectRevert();
-        guard.checkTransaction(address(multiSend), 0, "", Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), new bytes(65), address(this));
+        guard.checkTransaction(
+            address(multiSend),
+            0,
+            "",
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            payable(address(0)),
+            new bytes(65),
+            address(this)
+        );
     }
 }
