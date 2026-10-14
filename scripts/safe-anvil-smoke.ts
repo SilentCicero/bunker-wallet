@@ -1,5 +1,6 @@
 import { parseEther } from "viem";
 import { createBurnerSession, SEPOLIA_RPC } from "../apps/web/src/burner";
+import official from "../tests/fixtures/sepolia-safe-1.4.1.json";
 const { clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 if (!SEPOLIA_RPC.includes("127.0.0.1") && !SEPOLIA_RPC.includes("localhost")) throw new Error("This smoke test must run against local Anvil.");
@@ -9,6 +10,9 @@ const rpc = async (method: string, params: unknown[]) => {
   if (body.error) throw new Error(`${method} failed`);
   return body.result;
 };
+
+if (await rpc("eth_chainId", []) !== "0xaa36a7") throw new Error("Expected disposable Sepolia-chain Anvil.");
+for (const code of Object.values(official.codes)) await rpc("anvil_setCode", [code.address, code.runtime]);
 
 const mnemonic = `${"abandon ".repeat(23)}art`;
 const setup = loadMnemonicSigner(mnemonic);

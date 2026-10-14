@@ -16,12 +16,15 @@ jobs:
       - run: bun run contract:test
       - name: Browser Safe integration smoke
         run: |
-          anvil --fork-url https://ethereum-sepolia-rpc.publicnode.com --port 8545 --silent > /tmp/anvil.log 2>&1 &
-          for i in {1..30}; do curl -s -X POST -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' http://127.0.0.1:8545 | grep -q aa36a7 && break; sleep 1; done
+          anvil --chain-id 11155111 --port 8545 --silent > /tmp/anvil.log 2>&1 &
+          ready=0
+          for i in {1..30}; do if curl -s -X POST -H 'content-type: application/json' --data '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' http://127.0.0.1:8545 | grep -q aa36a7; then ready=1; break; fi; sleep 1; done
+          if [ "$ready" -ne 1 ]; then cat /tmp/anvil.log; exit 1; fi
           bun run safe:smoke
       - run: bun run build
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:e2e
+      - run: bunx playwright test --config playwright.preview.config.ts
       - name: Encrypted browser refresh recovery
         run: BROWSER_SEPOLIA_E2E=1 VITE_BROWSER_SEPOLIA_E2E=1 bun run test:e2e --grep "Sepolia persistence"
       - run: bun run release:verify
