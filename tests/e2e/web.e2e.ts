@@ -192,7 +192,7 @@ test("Sepolia persistence: migrates an open legacy tab session", async ({ page }
   await page.reload({waitUntil:"networkidle"});
   await expect(page.getByRole("heading",{name:"One address. Fresh keys."})).toBeVisible();
   expect(await page.evaluate(()=>sessionStorage.getItem("bunker-unlocked-wallet"))).toBeNull();
-  expect(await deviceWalletData(page)).toBe("[]");
+  await expect.poll(() => deviceWalletData(page), { timeout: 5_000 }).toBe("[]");
 });
 
 test("Sepolia persistence: phrase recovery needs no password", async ({ page }) => {
