@@ -11,6 +11,7 @@
     "dev": "bun run --cwd apps/web dev",
     "build": "bun run contract:compile && bun run --cwd apps/web build",
     "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check .github/workflows/ci.yml apps/web/src/App.tsx apps/web/src/SigningModes.tsx apps/web/src/design.css apps/web/src/unlockedSession.ts docs/experimental-browser-pq.md tests/e2e/pq-v2.e2e.ts tests/e2e/pq.e2e.ts tests/e2e/v3-lifecycle.e2e.ts tests/e2e/web.e2e.ts",
     "test": "bun test",
     "test:e2e": "playwright test",
     "relayer": "bun apps/relayer/src/index.ts",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/bun": "1.4.2",
+    "prettier": "3.6.2",
     "solc": "0.8.24",
     "typescript": "5.9.3",
     "vite": "8.3.3",
