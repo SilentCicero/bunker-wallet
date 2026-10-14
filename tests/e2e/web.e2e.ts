@@ -188,6 +188,7 @@ test("Sepolia persistence: migrates an open legacy tab session", async ({ page }
   expect(await page.evaluate(()=>sessionStorage.getItem("bunker-unlocked-wallet"))).toBeNull();
   expect(await deviceWalletData(page)).not.toMatch(/mnemonic|privateKey/);
   await page.getByRole("button",{name:"Lock"}).click();
+  await expect(page.getByRole("heading",{name:"One address. Fresh keys."})).toBeVisible();
   await seedLegacyWallet(page,Date.now()-1);
   await page.reload({waitUntil:"networkidle"});
   await expect(page.getByRole("heading",{name:"One address. Fresh keys."})).toBeVisible();

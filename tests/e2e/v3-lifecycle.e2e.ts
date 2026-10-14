@@ -135,6 +135,7 @@ for(const mode of ['Standard','Quantum Shield','Maximum'] as const)test(`V3 ${mo
 
 async function lock(page:Page,mode:'Standard'|'Quantum Shield'|'Maximum',reload=true){
  await (mode==='Standard'?page.getByRole('button',{name:'Lock',exact:true}):page.getByRole('region',{name:'Experimental PQ wallet'}).getByRole('button',{name:'Lock / cancel'})).click();
+ await expect(page.getByRole('heading',{name:'One address. Fresh keys.'})).toBeVisible();
  if(reload)await page.reload();
 }
 async function savedOption(page:Page,mode:'Standard'|'Quantum Shield'|'Maximum'){
@@ -160,7 +161,6 @@ for(const mode of ['Standard','Quantum Shield','Maximum'] as const)test(`V3 ${mo
  if(mode==='Standard')await expect(page.getByText('Ethereum Sepolia Safe · live')).toBeVisible({timeout:90000});
  else await expect(page.getByRole('region',{name:'Experimental PQ wallet'}).getByRole('button',{name:'Send + rotate key'})).toBeEnabled({timeout:90000});
  await onchain(safe,mode,0,phrase);
- if(mode==='Standard')await page.evaluate(async()=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('bunker-unlocked-session');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});const active=await new Promise<unknown>((resolve,reject)=>{const request=db.transaction('keys').objectStore('keys').get('active');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});db.close();if(!active)throw new Error('Unlocked session missing');sessionStorage.setItem('bunker-unlocked-wallet',JSON.stringify(active))});
  await lock(page,mode,false); // Exercise immediate exit → replacement without a reload.
  option=await savedOption(page,mode);await expect(option).toBeVisible({timeout:30000});
  if(mode==='Standard')await option.getByRole('button',{name:'Delete local Standard data & create new'}).click();
