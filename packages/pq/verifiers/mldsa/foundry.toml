@@ -6,4 +6,7 @@ evm_version = "osaka"
 optimizer = true
 optimizer_runs = 10000
 via_ir = true
-fs_permissions = [{access="read",path="./fixtures"}]
+fs_permissions = [
+  { access = "read", path = "." },
+  { access = "read", path = "../../test-vectors" },
+]

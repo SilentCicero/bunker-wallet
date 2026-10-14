@@ -98,6 +98,7 @@ bun test
 bun run build
 bun run contract:compile
 bun run contract:test
+cargo test --release --locked --manifest-path packages/pq/c10/Cargo.toml
 # With a Sepolia-forked Anvil node on port 8545:
 bun run safe:smoke
 # Local-only, explicitly gated live runners; never run in CI:
@@ -113,7 +114,7 @@ The static site builds to `apps/web/dist`, ready for Cloudflare Pages. The local
 bun run relayer
 ```
 
-The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Current checks include 27 Bun tests, 7 Foundry integration tests, a local Safe deployment/rotation smoke, a restricted live Sepolia deploy/send/two-rotation/recovery smoke, and gated browser lifecycle and persistence checks. The browser flow was validated with controlled test recipients; ENS resolution is tested separately. Independent audit and expanded fuzz/property testing remain mandatory before broader use.
+The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Checks include Bun tests, [four Foundry suites](docs/contract-test-matrix.md) with public C10/ML-DSA verifier vectors and adversarial cases, locked Cargo signer tests, a local Safe deployment/rotation smoke, and gated browser lifecycle and persistence checks. The browser flow was validated with controlled test recipients; ENS resolution is tested separately. Independent audit and deeper fuzz/property testing remain mandatory before broader use.
 
 ## Security model and recovery
 
@@ -121,6 +122,8 @@ The fixed batch has 20 committed owners and permits 19 ordinary rotations; the f
 
 See [SECURITY.md](SECURITY.md) for responsible disclosure. Mainnet release is a separate decision requiring an independent review, verified deployments, reproducible evidence, and restricted-value testing.
 
-## License
+## Licenses and thanks
 
-MIT. Safe contracts retain their upstream license.
+Bunker Wallet is [MIT licensed](LICENSE). Vendored [Safe 1.4.1](packages/contracts/lib/@safe-global/safe-contracts/LICENSE) remains LGPL-3.0-only; the adapted [C10 signer](packages/pq/c10/LICENSE), [C10 verifier](packages/pq/verifiers/c10/LICENSE), and [ML-DSA verifier](packages/pq/verifiers/mldsa/LICENSE) retain their MIT licenses. See [dependency details](docs/dependencies.md).
+
+Thanks to the Safe contributors, Nicolas Consigny (C10), Fireblocks Labs (ML-DSA verifier), and Paul Miller and the Noble/Scure contributors for the cryptographic foundations. Attribution does not imply their endorsement or an independent security audit of this wallet.

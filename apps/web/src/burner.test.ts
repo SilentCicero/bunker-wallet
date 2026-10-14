@@ -1,13 +1,97 @@
-import { afterEach, expect, test } from "bun:test";
-import { createBurnerSession, deriveLocalPreviewOwnerAddress, deriveLocalPreviewWalletAddress, readSepoliaBalance, resolveRecipient, SEPOLIA_CHAIN_ID, SEPOLIA_FAUCET } from "./burner";
-const session=createBurnerSession();
-const {clearEphemeralBurner,createEphemeralBurner,hasEphemeralBurner}=session;
+import { afterEach, expect, test } from 'bun:test';
+import {
+  createBurnerSession,
+  deriveLocalPreviewOwnerAddress,
+  deriveLocalPreviewWalletAddress,
+  readSepoliaBalance,
+  resolveRecipient,
+  SEPOLIA_CHAIN_ID,
+  SEPOLIA_FAUCET,
+} from './burner';
+const session = createBurnerSession();
+const { clearEphemeralBurner, createEphemeralBurner, hasEphemeralBurner } = session;
 afterEach(clearEphemeralBurner);
-test("creates a memory-only burner address and clears it", () => { expect(SEPOLIA_CHAIN_ID).toBe(11155111); const address=createEphemeralBurner(); expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/); expect(hasEphemeralBurner()).toBe(true); clearEphemeralBurner(); expect(hasEphemeralBurner()).toBe(false); });
-test("derives distinct hardened BIP-32 preview addresses from BIP-39", () => { const mnemonic=`${"abandon ".repeat(23)}art`; const wallet=deriveLocalPreviewWalletAddress(mnemonic), first=deriveLocalPreviewOwnerAddress(mnemonic,0), second=deriveLocalPreviewOwnerAddress(mnemonic,1); expect(wallet).toMatch(/^0x[0-9a-fA-F]{40}$/); expect(first).not.toBe(wallet); expect(second).not.toBe(first); expect(deriveLocalPreviewOwnerAddress(mnemonic,0)).toBe(first); });
-test("accepts addresses and rejects malformed recipients without RPC",async()=>{const address="0x0000000000000000000000000000000000000001";expect(await resolveRecipient(address,[async()=>{throw new Error("must not run")}])).toBe(address);expect(resolveRecipient("not a recipient")).rejects.toThrow("valid Ethereum address")});
-test("falls back when the primary ENS resolver fails",async()=>{const address="0x0000000000000000000000000000000000000002";expect(await resolveRecipient("vitalik.eth",[async()=>{throw new Error("offline")},async()=>address])).toBe(address)});
-test("sanitizes ENS resolver failures",async()=>{await expect(resolveRecipient("vitalik.eth",[async()=>{throw new Error("raw RPC failure")},async()=>null])).rejects.toThrow("Retry or paste the recipient’s 0x address")});
-test("allows only explicit Ethereum mainnet ENS RPC hosts in CSP",async()=>{const headers=await Bun.file(new URL("../public/_headers",import.meta.url)).text();expect(headers).toContain("https://ethereum-rpc.publicnode.com");expect(headers).toContain("https://cloudflare-eth.com");expect(headers).not.toContain("connect-src *")});
-test("uses the allowlisted Google Cloud Ethereum Sepolia faucet", () => { const url=new URL(SEPOLIA_FAUCET); expect(url.protocol).toBe("https:"); expect(url.hostname).toBe("cloud.google.com"); expect(url.pathname).toBe("/application/web3/faucet/ethereum/sepolia"); });
-test("bounds and validates Ethereum Sepolia balance responses", async () => { const original=globalThis.fetch; const mock=(body:string):typeof fetch=>Object.assign(async (..._args:Parameters<typeof fetch>)=>new Response(body),{preconnect:original.preconnect}); try { globalThis.fetch=mock('{"jsonrpc":"2.0","id":1,"result":"0x2a"}'); expect(await readSepoliaBalance("0x0000000000000000000000000000000000000001")).toBe(42n); globalThis.fetch=mock('{"result":"0x00"}'); expect(readSepoliaBalance("0x0000000000000000000000000000000000000001")).rejects.toThrow("invalid balance"); } finally { globalThis.fetch=original; } });
+test('creates a memory-only burner address and clears it', () => {
+  expect(SEPOLIA_CHAIN_ID).toBe(11155111);
+  const address = createEphemeralBurner();
+  expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  expect(hasEphemeralBurner()).toBe(true);
+  clearEphemeralBurner();
+  expect(hasEphemeralBurner()).toBe(false);
+});
+test('derives fixed hardened BIP-32 preview addresses from the public BIP-39 vector', () => {
+  const mnemonic = `${'abandon '.repeat(23)}art`;
+  expect(deriveLocalPreviewWalletAddress(mnemonic)).toBe(
+    '0x13f5A50A3DD24539511aFB2411cc49B92214cfA5',
+  );
+  expect(deriveLocalPreviewOwnerAddress(mnemonic, 0)).toBe(
+    '0x913264Dd8E2564d9BC7146142257d1B3D45092CA',
+  );
+  expect(deriveLocalPreviewOwnerAddress(mnemonic, 1)).toBe(
+    '0xaCFf6Df910403cD9483dae49A2FF474d1D01161D',
+  );
+  for (const index of [-1, 0.5, 2 ** 31, Number.NaN]) {
+    expect(() => deriveLocalPreviewOwnerAddress(mnemonic, index)).toThrow();
+  }
+});
+test('accepts addresses and rejects malformed recipients without RPC', async () => {
+  const address = '0x0000000000000000000000000000000000000001';
+  expect(
+    await resolveRecipient(address, [
+      async () => {
+        throw new Error('must not run');
+      },
+    ]),
+  ).toBe(address);
+  expect(resolveRecipient('not a recipient')).rejects.toThrow('valid Ethereum address');
+});
+test('falls back when the primary ENS resolver fails', async () => {
+  const address = '0x0000000000000000000000000000000000000002';
+  expect(
+    await resolveRecipient('vitalik.eth', [
+      async () => {
+        throw new Error('offline');
+      },
+      async () => address,
+    ]),
+  ).toBe(address);
+});
+test('sanitizes ENS resolver failures', async () => {
+  await expect(
+    resolveRecipient('vitalik.eth', [
+      async () => {
+        throw new Error('raw RPC failure');
+      },
+      async () => null,
+    ]),
+  ).rejects.toThrow('Retry or paste the recipient’s 0x address');
+});
+test('allows only explicit Ethereum mainnet ENS RPC hosts in CSP', async () => {
+  const headers = await Bun.file(new URL('../public/_headers', import.meta.url)).text();
+  expect(headers).toContain('https://ethereum-rpc.publicnode.com');
+  expect(headers).toContain('https://cloudflare-eth.com');
+  expect(headers).not.toContain('connect-src *');
+});
+test('uses the allowlisted Google Cloud Ethereum Sepolia faucet', () => {
+  const url = new URL(SEPOLIA_FAUCET);
+  expect(url.protocol).toBe('https:');
+  expect(url.hostname).toBe('cloud.google.com');
+  expect(url.pathname).toBe('/application/web3/faucet/ethereum/sepolia');
+});
+test('bounds and validates Ethereum Sepolia balance responses', async () => {
+  const original = globalThis.fetch;
+  const mock = (body: string): typeof fetch =>
+    Object.assign(async (..._args: Parameters<typeof fetch>) => new Response(body), {
+      preconnect: original.preconnect,
+    });
+  try {
+    globalThis.fetch = mock('{"jsonrpc":"2.0","id":1,"result":"0x2a"}');
+    expect(await readSepoliaBalance('0x0000000000000000000000000000000000000001')).toBe(42n);
+    globalThis.fetch = mock('{"result":"0x00"}');
+    expect(readSepoliaBalance('0x0000000000000000000000000000000000000001')).rejects.toThrow(
+      'invalid balance',
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
