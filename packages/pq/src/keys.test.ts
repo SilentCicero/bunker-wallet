@@ -15,6 +15,16 @@ test('HKDF PQ domains and fixed-width account/index/epoch are separate and repro
     expect(v).not.toEqual(a);
   expect(() => derivePQSeed(new Uint8Array(32), 'mldsa44')).toThrow();
   expect(() => derivePQSeed(seed, 'c10', -1)).toThrow();
+  expect(derivePQSeed(seed, 'c10').length).toBe(48);
+  expect(derivePQSeed(seed, 'mldsa44', 0xffffffff, 0xffffffff, 0xffffffff).length).toBe(32);
+  for (const value of [-1, 0.5, 0x1_0000_0000, Number.NaN, Number.POSITIVE_INFINITY]) {
+    expect(() => derivePQSeed(seed, 'c10', value)).toThrow('path');
+    expect(() => derivePQSeed(seed, 'mldsa44', 0, value)).toThrow('path');
+    expect(() => derivePQSeed(seed, 'mldsa44', 0, 0, value)).toThrow('path');
+  }
+  expect(derivePQSeed(seed, 'mldsa44', 1, 0, 0)).not.toEqual(
+    derivePQSeed(seed, 'mldsa44', 0, 1, 0),
+  );
 });
 test('MLDSA real KeyGen + exact Python prepare differential; known degenerate keys rejected', async () => {
   const keys = ml_dsa44.keygen(new Uint8Array(32)),
@@ -50,6 +60,8 @@ test('C10 WASM matches pinned Python and native Rust signature, no host imports'
     module = await WebAssembly.compile(bytes);
   expect(WebAssembly.Module.imports(module)).toEqual([]);
   const wasm = (await WebAssembly.instantiate(module)).exports as C10Wasm;
+  expect(() => c10Sign(wasm, new Uint8Array(32).fill(2))).toThrow('failed');
+  expect(() => c10Keygen(wasm, new Uint8Array(47))).toThrow();
   expect(bytesToHex(c10Keygen(wasm, new Uint8Array(48).fill(1)))).toBe(
     '0x0101010101010101010101010101010142091ce501796f008e9b5ac204f2beb6',
   );

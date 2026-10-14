@@ -82,7 +82,7 @@ test('@V2 valid pending checkpoint offers restore or acknowledged archive and fr
       pending: {
         kind: 'createV2',
         hash: '0x' + 'ab'.repeat(32),
-        sealed: { ciphertext: 'synthetic-encrypted-intent' },
+        sealed: { iv: '0x' + '12'.repeat(12), ciphertext: '0x' + '34'.repeat(16) },
       },
     }),
     vault = '{"encrypted":"synthetic-private-vault"}';
