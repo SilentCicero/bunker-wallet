@@ -132,3 +132,84 @@ for(const mode of ['Standard','Quantum Shield','Maximum'] as const)test(`V3 ${mo
   await recover(page,mode,safe,phrase);await onchain(safe,mode,4,phrase);
  }
 });
+
+async function lock(page:Page,mode:'Standard'|'Quantum Shield'|'Maximum',reload=true){
+ await (mode==='Standard'?page.getByRole('button',{name:'Lock',exact:true}):page.getByRole('region',{name:'Experimental PQ wallet'}).getByRole('button',{name:'Lock / cancel'})).click();
+ if(reload)await page.reload();
+}
+async function savedOption(page:Page,mode:'Standard'|'Quantum Shield'|'Maximum'){
+ await page.getByRole('button',{name:'Setup options'}).click();
+ await page.getByRole('button',{name:`Select ${mode}`}).click();
+ return page.getByRole('group',{name:mode==='Standard'?'Saved Standard setup':'Replace saved test wallet'});
+}
+for(const mode of ['Standard','Quantum Shield','Maximum'] as const)test(`V3 ${mode}: exit → cancel → recover → delete locally → create new`,async({page})=>{
+ test.skip(!enabled);
+ const {phrase,safe}=await create(page,mode),oldCode=await client.getCode({address:safe});
+ await onchain(safe,mode,0,phrase);
+ await lock(page,mode);
+ const oldStorage=await page.evaluate(()=>['bunker-vault','bunker-safe-wallet','bunker-standard-setup-v1','bunker-experimental-wallet-v1','bunker-experimental-vault-v1'].map(key=>localStorage.getItem(key)));
+ let broadcasts=0;
+ await page.context().route(url=>url.origin===rpc,async route=>{if(route.request().postDataJSON()?.method==='eth_sendRawTransaction')broadcasts++;await route.continue()});
+ let option=await savedOption(page,mode);await expect(option).toBeVisible({timeout:30000});
+ if(mode==='Standard')await option.getByRole('button',{name:'Delete local Standard data & create new'}).click();
+ await option.getByRole('button',{name:'Cancel'}).click();
+ await expect(page.getByRole('heading',{name:'One address. Fresh keys.'})).toBeVisible();
+ expect(await page.evaluate(()=>['bunker-vault','bunker-safe-wallet','bunker-standard-setup-v1','bunker-experimental-wallet-v1','bunker-experimental-vault-v1'].map(key=>localStorage.getItem(key)))).toEqual(oldStorage);
+ option=await savedOption(page,mode);await option.getByRole('button',{name:'Recover wallet'}).click();
+ const screen=page.locator('.recover-screen');await screen.getByLabel('24-word recovery phrase').fill(phrase);await screen.getByLabel('Existing Safe address').fill(safe);await screen.getByLabel('Browser password · 12–256 characters').fill('public-test-password');await screen.getByRole('button',{name:'Recover and save wallet'}).click();
+ if(mode==='Standard')await expect(page.getByText('Ethereum Sepolia Safe · live')).toBeVisible({timeout:90000});
+ else await expect(page.getByRole('region',{name:'Experimental PQ wallet'}).getByRole('button',{name:'Send + rotate key'})).toBeEnabled({timeout:90000});
+ await onchain(safe,mode,0,phrase);
+ if(mode==='Standard')await page.evaluate(async()=>{const db=await new Promise<IDBDatabase>((resolve,reject)=>{const request=indexedDB.open('bunker-unlocked-session');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});const active=await new Promise<unknown>((resolve,reject)=>{const request=db.transaction('keys').objectStore('keys').get('active');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});db.close();if(!active)throw new Error('Unlocked session missing');sessionStorage.setItem('bunker-unlocked-wallet',JSON.stringify(active))});
+ await lock(page,mode,false); // Exercise immediate exit → replacement without a reload.
+ option=await savedOption(page,mode);await expect(option).toBeVisible({timeout:30000});
+ if(mode==='Standard')await option.getByRole('button',{name:'Delete local Standard data & create new'}).click();
+ const confirmation=mode==='Standard'?option:page.getByRole('group',{name:'Replace saved test wallet'});
+ if(mode==='Standard'){await page.setViewportSize({width:320,height:700});expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBe(320);await page.setViewportSize({width:1366,height:768})}
+ await confirmation.getByRole('checkbox').check();
+ await confirmation.getByRole('button',{name:mode==='Standard'?'Delete local data & create new':'Continue — replace local wallet'}).click();
+ await expect(page.getByRole('heading',{name:'Write down these 24 words.'})).toBeVisible();
+ if(mode==='Standard')expect(await page.evaluate(()=>sessionStorage.getItem('bunker-unlocked-wallet')===null)).toBe(true);
+ const nextPhrase=(await page.locator('.words li').allTextContents()).map(word=>word.replace(/^\d+/,'' )).join(' ');expect(nextPhrase).not.toBe(phrase);
+ expect(await client.getCode({address:safe})).toBe(oldCode);await onchain(safe,mode,0,phrase);expect(broadcasts).toBe(0);
+ await page.getByRole('checkbox',{name:'I saved the phrase offline.'}).check();await page.getByRole('button',{name:'Skip check'}).click();
+ await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');await page.getByRole('button',{name:'Encrypt and save this browser'}).click();
+ const newSetup=(await (mode==='Standard'?page.locator('.setup'):page.getByRole('region',{name:'Experimental PQ wallet'})).getByText('Setup address',{exact:true}).locator('..').locator('code').textContent()) as Address;
+ expect(newSetup.toLowerCase()).not.toBe(mnemonicToAccount(phrase,{path:"m/44'/60'/7331'/0/0"}).address.toLowerCase());
+ await page.reload();
+ if(mode==='Standard')await expect(page.locator('.setup').getByText('Setup address',{exact:true})).toBeVisible({timeout:30000});
+ else {await page.getByLabel('Experimental vault password').fill('public-test-password');await page.getByRole('button',{name:'Recover saved wallet'}).click();await expect(page.getByRole('region',{name:'Experimental PQ wallet'}).getByText('Setup address',{exact:true})).toBeVisible({timeout:30000})}
+ expect(broadcasts).toBe(0);expect(await client.getCode({address:safe})).toBe(oldCode);
+});
+
+test('V3 unfinished Standard setup can be cancelled, resumed, then locally replaced',async({page})=>{
+ test.skip(!enabled);
+ await page.goto('/');await page.getByRole('button',{name:'Create wallet (Testnet)'}).click();await page.getByRole('button',{name:'Create wallet',exact:true}).click();
+ await page.getByRole('checkbox',{name:'I saved the phrase offline.'}).check();await page.getByRole('button',{name:'Skip check'}).click();
+ await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');await page.getByRole('button',{name:'Encrypt and save this browser'}).click();
+ const first=await page.locator('.setup').getByText('Setup address',{exact:true}).locator('..').locator('code').textContent();
+ let broadcasts=0;await page.context().route(url=>url.origin===rpc,async route=>{if(route.request().postDataJSON()?.method==='eth_sendRawTransaction')broadcasts++;await route.continue()});
+ await lock(page,'Standard');let option=await savedOption(page,'Standard');await option.getByRole('button',{name:'Cancel'}).click();
+ option=await savedOption(page,'Standard');await option.getByRole('button',{name:'Recover wallet'}).click();await page.getByLabel('Standard vault password').fill('public-test-password');await page.getByRole('button',{name:'Recover saved wallet'}).click();
+ await expect(page.locator('.setup').getByText('Setup address',{exact:true})).toBeVisible();await lock(page,'Standard',false);
+ option=await savedOption(page,'Standard');await option.getByRole('button',{name:'Delete local Standard data & create new'}).click();await option.getByRole('checkbox').check();await option.getByRole('button',{name:'Delete local data & create new'}).click();
+ await expect(page.getByRole('heading',{name:'Write down these 24 words.'})).toBeVisible();expect(await page.evaluate(()=>localStorage.getItem('bunker-standard-setup-v1')===null)).toBe(true);
+ await page.getByRole('checkbox',{name:'I saved the phrase offline.'}).check();await page.getByRole('button',{name:'Skip check'}).click();await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');await page.getByRole('button',{name:'Encrypt and save this browser'}).click();
+ const second=await page.locator('.setup').getByText('Setup address',{exact:true}).locator('..').locator('code').textContent();expect(second).not.toBe(first);expect(broadcasts).toBe(0);
+});
+
+test('V3 uncertain Standard deployment and pending PQ intent refuse replacement',async({page})=>{
+ test.skip(!enabled);
+ const {phrase,safe}=await create(page,'Standard');await lock(page,'Standard');
+ await page.evaluate(address=>localStorage.setItem('bunker-standard-setup-v1',JSON.stringify({version:1,state:'deploying',address})),mnemonicToAccount(phrase,{path:"m/44'/60'/7331'/0/0"}).address);await page.reload();
+ const standard=await savedOption(page,'Standard');await expect(standard).toContainText('outcome uncertain');await expect(standard.getByRole('button',{name:/Delete local/})).toHaveCount(0);
+ await standard.getByRole('button',{name:'Cancel'}).click();await onchain(safe,'Standard',0,phrase);
+ await page.evaluate(()=>localStorage.removeItem('bunker-standard-setup-v1')); // Remove only the synthetic uncertain journal.
+ const pq=await create(page,'Quantum Shield');await lock(page,'Quantum Shield');
+ const original=await page.evaluate(()=>{const record=JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!);record.pending={kind:'send',hash:'0x'+'ab'.repeat(32),sealed:{ciphertext:'test-only'}};const raw=JSON.stringify(record);localStorage.setItem('bunker-experimental-wallet-v1',raw);return raw});
+ await page.reload();await savedOption(page,'Quantum Shield');
+ await expect(page.getByRole('group',{name:'Pending saved experimental setup'})).toBeVisible();
+ await expect(page.getByRole('button',{name:'Continue — replace local wallet'})).toHaveCount(0);
+ expect(await page.evaluate(()=>localStorage.getItem('bunker-experimental-wallet-v1'))).toBe(original);
+ await onchain(pq.safe,'Quantum Shield',0,pq.phrase);
+});
