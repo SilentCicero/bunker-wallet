@@ -28,7 +28,10 @@ test('creation has one CTA; recovery is separate with phrase and Safe only',asyn
  for(const mode of ['Standard','Quantum Shield','Maximum'] as const){
   await choose(page,mode);await expect(page.getByRole('slider',{name:'Signing mode'})).toHaveAttribute('aria-valuetext',new RegExp(mode));
   await expect(page.locator('.advanced .stepper li')).toHaveCount(5);expect(await page.locator('.advanced .stepper').evaluate(el=>getComputedStyle(el).borderTopWidth)).toBe('0px');await expect(page.locator('.advanced .stepper li[aria-current="step"]')).toContainText('Choose signing mode');await expect(page.locator('.advanced .stepper li[aria-current="step"] span')).toHaveText('1');
-  await expect(page.locator('.security-selector label strong')).toHaveText(`${mode} · ${mode==='Standard'?'Single Signature':'Dual Signature (2 of 2)'}`);expect(await page.locator('.security-ticks small').evaluateAll(els=>els.every(el=>{const r=document.createRange();r.selectNodeContents(el);return new Set([...r.getClientRects()].map(rect=>Math.round(rect.top))).size===1}))).toBe(true);
+  await expect(page.locator('.security-selector label strong')).toHaveText(`${mode} · ${mode==='Standard'?'Single Signature':'Dual Signature (2 of 2)'}`);
+  await expect(page.locator('.security-gas')).toContainText(/~\S+ setup \/ ~\S+ sending/);
+  await expect(page.locator('.security-ticks small')).toHaveText(['Non-experimental','Experimental','Experimental']);
+  const selected=page.getByRole('button',{name:`Select ${mode}`});await expect(selected).toHaveAttribute('aria-pressed','true');expect(await selected.evaluate(el=>({border:getComputedStyle(el).borderTopWidth,radius:getComputedStyle(el).borderRadius,shadow:getComputedStyle(el).boxShadow}))).toEqual({border:'2px',radius:'4px',shadow:'none'});
   await expect(page.getByRole('slider',{name:'Signing mode'})).toHaveAttribute('aria-valuetext',new RegExp(mode==='Standard'?'Single Signature':'Dual Signature, 2 of 2'));
   await expect(page.locator('.advanced .secure-actions button')).toHaveCount(1);
   await expect(page.getByText(/Budget at least 0.03 test ETH for setup/)).not.toBeVisible();
