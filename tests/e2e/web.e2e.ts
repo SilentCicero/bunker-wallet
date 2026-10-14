@@ -70,6 +70,31 @@ test("local preview rotates without blockchain access", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "One address. Fresh keys." })).toBeVisible();
 });
 
+test("signing modes disclose unavailable PQ protection without changing Standard", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Setup options" }).click();
+  const modes = page.getByRole("group", { name: "Signing mode" });
+  await expect(modes.getByRole("radio", { name: /Standard/ })).toBeChecked();
+  await expect(modes.getByRole("radio", { name: /Quantum Shield/ })).toBeDisabled();
+  await expect(modes.getByRole("radio", { name: /Maximum/ })).toBeDisabled();
+  await expect(modes).toContainText("not available for wallet creation");
+  await expect(modes).toContainText("not NIST SLH-DSA");
+  await expect(modes).toContainText("not NIST-certified");
+  await expect(modes).toContainText("not a proven security ranking");
+  const standard = modes.getByRole("radio", { name: /Standard/ });
+  await standard.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(standard).toBeChecked();
+  await page.keyboard.press("Tab");
+  await expect(modes.getByRole("link", { name: "Safe signature handling" })).toBeFocused();
+  await expect(modes.getByRole("link", { name: "C10 verifier source" })).toHaveAttribute("href", /55b2f3e25d8d7cc0df33ccdb13becca1a168b26f/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "B Bunker" }).click();
+  await page.getByRole("button", { name: "Try It (Simulation)" }).first().click();
+  await expect(page.locator(".signing-status")).toHaveText("Standard · ECDSA only · No PQ signature");
+});
+
 test("Ethereum Sepolia remains disabled", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Use Ethereum Sepolia (Soon)" })).toBeDisabled();

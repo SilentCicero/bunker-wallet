@@ -16,7 +16,8 @@ import {
 } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { mainnet, sepolia } from "viem/chains";
-import { bunkerGuardAbi, bunkerGuardBytecode, bunkerGuardRuntimeHash, bunkerSetupAbi, bunkerSetupBytecode, safeProxyRuntimeHash } from "./safeArtifacts";
+import { bunkerGuardAbi, bunkerGuardRuntimeHash, bunkerSetupAbi, bunkerSetupBytecode, safeProxyRuntimeHash } from "./safeArtifacts";
+import { bunkerGuardAbi as bunkerGuardV3Abi, bunkerGuardBytecode as bunkerGuardV3Bytecode, bunkerGuardRuntimeHash as bunkerGuardV3RuntimeHash } from "./safeArtifactsV3";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_RPC = import.meta.env.VITE_SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com";
@@ -122,7 +123,9 @@ const sequence = () => {
 const storageAddress = (value?: Hex) => value ? (`0x${value.slice(-40)}` as Address) : ZERO;
 
 async function attestSafe(safe: Address, expectedOwner: Address, expectedGuard: Address) {
-  await Promise.all([checkedCode(safe, safeProxyRuntimeHash), checkedCode(expectedGuard, bunkerGuardRuntimeHash)]);
+  await checkedCode(safe, safeProxyRuntimeHash);
+  const guardCode = await publicClient.getCode({ address: expectedGuard });
+  if (!guardCode || !([bunkerGuardRuntimeHash, bunkerGuardV3RuntimeHash] as readonly Hex[]).includes(keccak256(guardCode))) throw new Error("Unsupported Safe guard bytecode.");
   const [owners, threshold, modules, guardSlot, fallbackSlot, singletonSlot, guardState, multiSend, multiSendHash] = await Promise.all([
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getThreshold" }),
@@ -230,7 +233,7 @@ async function finalizeSafeWallet(safe: Address): Promise<Address> {
   return safe;
 }
 
-async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash: Hex) => void): Promise<Address> {
+async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash: Hex) => void, onFactoryHash?: (transactionHash: Hex) => void): Promise<Address> {
   const current = ownerAccount();
   const { account, client } = sponsorClient();
   const startingBalance = await publicClient.getBalance({ address: account.address });
@@ -240,13 +243,14 @@ async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash:
     checkedCode(SAFE_PROXY_FACTORY, FACTORY_CODE_HASH),
     checkedCode(MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH),
   ]);
-  const guard = await deploy(bunkerGuardAbi, bunkerGuardBytecode, [MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH]);
+  const guard = await deploy(bunkerGuardV3Abi, bunkerGuardV3Bytecode, [MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH]);
   const helper = await deploy(bunkerSetupAbi, bunkerSetupBytecode);
   const owners = sequence().map(key => privateKeyToAccount(key).address) as [Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address];
   const helperData = encodeFunctionData({ abi: bunkerSetupAbi, functionName: "setup", args: [guard, owners] });
   const initializer = encodeFunctionData({ abi: safeAbi, functionName: "setup", args: [[current.address], 1n, helper, helperData, ZERO, ZERO, 0n, ZERO] });
   const saltNonce = BigInt(generatePrivateKey());
   const factoryHash = await client.writeContract({ address: SAFE_PROXY_FACTORY, abi: factoryAbi, functionName: "createChainSpecificProxyWithNonce", args: [SAFE_SINGLETON, initializer, saltNonce] });
+  onFactoryHash?.(factoryHash);
   const factoryReceipt = await publicClient.waitForTransactionReceipt({ hash: factoryHash });
   const event = parseEventLogs({ abi: factoryAbi, logs: factoryReceipt.logs, eventName: "ProxyCreation" })[0];
   if (factoryReceipt.status !== "success" || !event) throw new Error("Safe proxy deployment failed.");
