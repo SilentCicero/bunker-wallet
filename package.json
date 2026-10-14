@@ -17,7 +17,7 @@
     "relayer": "bun apps/relayer/src/index.ts",
     "dependency:report": "bun scripts/dependency-report.ts",
     "contract:compile": "bun scripts/compile-contract.ts",
-    "contract:test": "cd packages/contracts && forge test",
+    "contract:test": "bash scripts/test-contracts.sh",
     "safe:smoke": "VITE_SEPOLIA_RPC=http://127.0.0.1:8545 bun scripts/safe-anvil-smoke.ts",
     "safe:sepolia:e2e": "bun scripts/safe-sepolia-e2e.ts",
     "safe:sepolia:fund-browser": "bun scripts/fund-sepolia-browser-e2e.ts",
