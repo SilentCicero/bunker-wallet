@@ -12,3 +12,8 @@ reports/*.json
 test-results/
 playwright-report/
 .pi-subagents/
+packages/contracts-experimental/cache/
+packages/contracts-experimental/out/
+packages/pq/c10/target/
+packages/pq/verifiers/*/cache/
+packages/pq/verifiers/*/out/

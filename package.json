@@ -21,10 +21,14 @@
     "safe:sepolia:e2e": "bun scripts/safe-sepolia-e2e.ts",
     "safe:sepolia:fund-browser": "bun scripts/fund-sepolia-browser-e2e.ts",
     "safe:sepolia:browser-e2e": "bun scripts/browser-sepolia-e2e.ts",
-    "release:verify": "bun scripts/release-verification.ts"
+    "release:verify": "bun scripts/release-verification.ts",
+    "pq:build": "bun scripts/build-pq.ts",
+    "pq:check": "bun scripts/pq-lifecycle-check.ts",
+    "pq:contracts": "cd packages/contracts-experimental && forge test"
   },
   "dependencies": {
     "@noble/hashes": "2.4.0",
+    "@noble/post-quantum": "0.7.1",
     "@scure/bip39": "2.4.0",
     "solid-js": "1.9.17",
     "viem": "2.57.3"
