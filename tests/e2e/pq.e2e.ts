@@ -444,6 +444,7 @@ test('passwordless unfinished Standard setup resumes locally after Lock without 
     .textContent();
   await rpc('anvil_setBalance', [setup, '0x3635c9adc5dea00000']);
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   await page.reload();
   await page.setViewportSize({ width: 320, height: 700 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
@@ -497,6 +498,7 @@ test('encrypted Standard pre-Safe setup resumes only with its matching checkpoin
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Add Ethereum Sepolia test ETH.' })).toBeVisible();
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Recover your wallet.' })).toBeVisible();
   await page.getByLabel('Standard vault password').fill('public-test-password');
@@ -505,6 +507,7 @@ test('encrypted Standard pre-Safe setup resumes only with its matching checkpoin
     page.getByText('Setup address', { exact: true }).locator('..').locator('code'),
   ).toHaveText(setup!);
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   const vault = await page.evaluate(() => {
     const data = localStorage.getItem('bunker-vault');
     localStorage.removeItem('bunker-standard-setup-v1');
@@ -609,6 +612,7 @@ test('Standard recovery auto-detects an actual guarded Safe', async ({ page, bro
   );
   expect(await page.evaluate(() => localStorage.getItem('bunker-standard-setup-v1'))).toBeNull();
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   await recoverSafe(page, mnemonic, safe!);
   await expect(page.getByText('Ethereum Sepolia Safe · live')).toBeVisible({ timeout: 30000 });
   expect(await page.evaluate(() => localStorage.getItem('bunker-vault'))).toBeTruthy();
@@ -621,6 +625,7 @@ test('Standard recovery auto-detects an actual guarded Safe', async ({ page, bro
     page.getByRole('button', { name: 'Copy stable Safe address' }).locator('code'),
   ).toHaveText(safe!);
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Recover your wallet.' })).toBeVisible();
   await expect(page.getByText('Saved on this browser')).toBeVisible();
@@ -775,6 +780,7 @@ test('unknown Standard deployment journal blocks replacement without broadcastin
   ).toBeDisabled();
   await expect(page.getByText(/Do not create another Safe/)).toBeVisible();
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'One address. Fresh keys.' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('alert')).toContainText(
     'A Standard Safe deployment may already exist',
