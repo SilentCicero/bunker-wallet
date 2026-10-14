@@ -556,7 +556,7 @@ test('V3 uncertain Standard deployment and pending PQ intent refuse replacement'
     record.pending = {
       kind: 'send',
       hash: '0x' + 'ab'.repeat(32),
-      sealed: { ciphertext: 'test-only' },
+      sealed: { iv: '0x' + '12'.repeat(12), ciphertext: '0x' + '34'.repeat(16) },
     };
     const raw = JSON.stringify(record);
     localStorage.setItem('bunker-experimental-wallet-v1', raw);
