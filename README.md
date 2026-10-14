@@ -1,6 +1,6 @@
 # Bunker Wallet
 
-Bunker Wallet is a **local-first simulation** of one stable Ethereum address whose ECDSA owner advances after every supported action. Its optional unaudited Ethereum Sepolia mode deploys an official Safe 1.4.1 proxy with Bunker’s fixed-sequence rotation guard. Mainnet is disabled. Do not use meaningful funds.
+Bunker Wallet is a **local-first simulation** of one stable Ethereum address whose ECDSA owner advances after every supported action. Its optional unaudited Ethereum Sepolia mode deploys an official Safe 1.4.1 proxy with Bunker’s V2 dynamic rotation guard. Mainnet is disabled. Do not use meaningful funds.
 
 ECDSA public keys become visible when an account signs. A future cryptanalytic break could make historically exposed keys more valuable targets. Bunker narrows that exposure by coupling a supported action and fresh-owner rotation in one atomic wallet operation. It is not “quantum-safe”: the pending transaction exposes a signature before confirmation, browser seed theft defeats rotation, and Ethereum still uses ECDSA.
 
@@ -27,7 +27,7 @@ Working today:
 - 24-word BIP-39 creation and recovery confirmation;
 - optional Argon2id + AES-256-GCM encrypted local vault;
 - seed-only mode with no plaintext persistence;
-- domain-separated fixed 20-owner commitment utilities;
+- dynamically derived or locally selected next owners with permanent per-Safe historical reuse prevention;
 - bounded, versioned file envelopes with strict validation and tamper checks;
 - loopback-only Bun validation service with no key or broadcast ability;
 - research guard source targeting official Safe contracts 1.4.1.
@@ -49,7 +49,7 @@ Blocked today:
 
 - independent review of the guard, atomic setup, browser transaction construction, recovery, persistence and runtime attestation;
 - expanded parser, signature-boundary, replacement, storage-attestation and reentrancy fuzz/property testing;
-- a reviewed owner-sequence refill or migration before the nineteenth ordinary rotation—no emergency bypass;
+- independent review of dynamic signer substitution risks and recovery after intentional seed/index switches;
 - physical Ledger and Trezor validation before hardware signing support;
 - **private transaction submission / protected relay:** evaluate private builder or relay submission to reduce public-mempool visibility of pending ECDSA signatures and exposed public keys during rotation. This would not hide them from the selected relay, builders or validators, or from the eventual chain, and it would not make Bunker quantum-safe;
 - mainnet, meaningful-funds use, arbitrary calls, modules, refunds and production relaying remain disabled.
@@ -113,11 +113,11 @@ The static site builds to `apps/web/dist`, ready for Cloudflare Pages. The local
 bun run relayer
 ```
 
-The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Current checks include 27 Bun tests, 7 Foundry integration tests, a local Safe deployment/rotation smoke, a restricted live Sepolia deploy/send/two-rotation/recovery smoke, and gated browser lifecycle and persistence checks. The browser flow was validated with controlled test recipients; ENS resolution is tested separately. Independent audit and expanded fuzz/property testing remain mandatory before broader use.
+The guard and one-shot setup helper compile with pinned solc 0.8.24 against vendored official Safe 1.4.1 sources. Current V2 verification and actual run results are recorded in [validation evidence](docs/dynamic-rotation-validation.md). Prior live Sepolia evidence applies only to the legacy V1 build, not these V2 contracts. The browser flow was validated with controlled test recipients; ENS resolution is tested separately. Independent audit and expanded fuzz/property testing remain mandatory before broader use.
 
 ## Security model and recovery
 
-The fixed batch has 20 committed owners and permits 19 ordinary rotations; the final transition is reserved to avoid silent exhaustion. There is no reviewed refill/migration path or emergency bypass. Hosted actions are limited to recipient ETH send, exact next-owner funding and owner swap; arbitrary calls, modules and refunds are rejected. Recover with the exact seed/device and metadata, then reconcile the active owner from authenticated chain state. Without recovery material, access may be permanently lost.
+V2 has no future commitments, batches of future keys, or 19-rotation limit. Initialization consumes the initial owner; each successful atomic rotation permanently consumes its next owner and increments a uint256 counter. A compromised current signer can select an attacker-controlled fresh owner: reuse prevention does not prevent substitution. V1 immutable Safes cannot upgrade in place; see [V2 compatibility and recovery](docs/dynamic-rotation.md). Hosted actions are limited to recipient ETH send, exact next-owner funding and owner swap; arbitrary calls, modules and refunds are rejected. Recover by matching the on-chain owner against an explicit bounded derivation range of the correct seed. Rotation count is not a derivation index. Back up the new phrase and index before a seed switch. Without recovery material, access may be permanently lost.
 
 See [SECURITY.md](SECURITY.md) for responsible disclosure. Mainnet release is a separate decision requiring an independent review, verified deployments, reproducible evidence, and restricted-value testing.
 

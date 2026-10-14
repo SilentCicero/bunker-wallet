@@ -9,7 +9,7 @@
 - Atomic Safe setup helper that initializes and installs `BunkerRotationGuard` during proxy creation.
 - Runtime hash checks for official Safe components before deployment and Safe owner/module/guard/singleton attestation before funding.
 - ETH send, exact next-owner gas funding, and owner rotation in one guarded Safe transaction.
-- Fixed 20-owner sequence with 19 ordinary rotations; contract/sentinel/Safe owners, modules, refunds, arbitrary calls, and guard changes are rejected.
+- V2 dynamic next owner, permanent `consumed[safe][owner]` history including initial owner, and uint256 rotation counter; contract/sentinel/Safe owners, modules, refunds, arbitrary calls, and guard changes are rejected.
 - Canonical ABI-padding support and 65-byte canonical-low-s ECDSA signature policy.
 - Receipt-uncertainty reconciliation before promoting the next browser signer.
 - Recovery-phrase mode derives owners deterministically; quick setup remains memory-only and unrecoverable after refresh.
@@ -18,19 +18,19 @@
 
 ## Disabled
 
-Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules; guard changes; sequence refill; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses.
+Mainnet; ERC-20 and message UI; arbitrary contract calls; Safe refunds; modules; guard changes; Ledger/Trezor signing; manual injected signing; WalletConnect; QR transport; production relayer deployment; emergency bypasses.
 
 ## Test status and release blockers
 
-Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, and sequence exhaustion. Browser CI covers the BIP-39/hardened-BIP-32 local preview and verifies that every Sepolia entry point remains disabled.
+Foundry integration tests execute the vendored Safe 1.4.1 proxy, setup helper, guard, and MultiSend path locally. They cover atomic setup, canonical padded execution, ETH transfer, next-owner funding, owner rotation, malformed funding rejection, at least 25 rotations, historical-owner rejection, rollback, and competing pending rotations. Browser CI covers the BIP-39/hardened-BIP-32 local preview and verifies that every Sepolia entry point remains disabled.
 
-Restricted-value Ethereum Sepolia tests passed on 2026-10-09. The direct smoke covered deploy → fund → ETH send → exact next-owner funding → two successive owner rotations → phrase recovery. A separate local-only browser run generated a fresh 24-word phrase in the app, encrypted it into an Argon2id/AES-GCM browser vault, funded the displayed setup address through the protected sponsor Safe, clicked through Safe creation, submitted two ETH sends, reloaded and unlocked the encrypted vault, restored the same Safe at key 3, submitted a third rotation to key 4, and verified stable-address continuity against chain state. Sanitized evidence is stored locally with the E2E secret rather than committed with transaction identifiers. The unaudited Sepolia flow is enabled at `https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev` for disposable test ETH only. Ethereum mainnet and meaningful-funds use remain disabled.
+Historical V1 evidence only (not V2 validation): restricted-value Ethereum Sepolia tests passed on 2026-10-09. The direct smoke covered deploy → fund → ETH send → exact next-owner funding → two successive owner rotations → phrase recovery. A separate local-only browser run generated a fresh 24-word phrase in the app, encrypted it into an Argon2id/AES-GCM browser vault, funded the displayed setup address through the protected sponsor Safe, clicked through Safe creation, submitted two ETH sends, reloaded and unlocked the encrypted vault, restored the same Safe at key 3, submitted a third rotation to key 4, and verified stable-address continuity against chain state. Sanitized evidence is stored locally with the E2E secret rather than committed with transaction identifiers. The unaudited Sepolia flow is enabled at `https://bunker.supplies` and `https://sepolia-test.bunker-wallet.pages.dev` for disposable test ETH only. Ethereum mainnet and meaningful-funds use remain disabled.
 
 Still required before broader use:
 
 1. Independent audit of the setup helper, guard, browser Safe transaction builder, and recovery flow.
 2. Expanded parser fuzzing, malicious recipient/reentrancy tests, and bytecode/proxy attestation tests.
-3. A reviewed sequence refill or migration protocol before the nineteenth rotation.
+3. Independent review of V2 dynamic signer substitution risk, recovery ranges, and seed/index-switch handling.
 4. Physical Ledger/Trezor firmware testing before hardware support claims.
 
 Browser encryption protects data at rest. A saved wallet survives refreshes and browser restarts using AES-GCM ciphertext and a non-extractable WebCrypto key in IndexedDB. Locking or cleared site data requires the vault password or recovery phrase again. There is no recovery backend. This cannot protect an entered or unlocked phrase from malicious same-origin code, extensions, browser compromise, or the operating system. JavaScript cannot guarantee secure erasure.

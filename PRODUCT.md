@@ -16,11 +16,11 @@ Security-conscious Ethereum users evaluating owner-key rotation with disposable 
 
 ## Product Purpose
 
-Bunker Wallet is an open-source Safe account experiment that atomically advances to a precommitted fresh ECDSA owner after each supported transaction, reducing historical public-key exposure.
+Bunker Wallet is an open-source Safe account experiment that atomically advances to a dynamically selected fresh ECDSA owner after each supported transaction, reducing historical public-key exposure.
 
 ## Positioning
 
-Unlike a conventional single-key wallet, supported transfers and owner rotation are one guarded Safe operation against a domain-separated committed owner sequence.
+Unlike a conventional single-key wallet, supported transfers and owner rotation are one guarded Safe operation with permanent per-Safe consumed-address history.
 
 ## Operating Context
 
@@ -28,7 +28,7 @@ Users create or restore a browser seed, secure a backup, prepare narrowly suppor
 
 ## Capabilities and Constraints
 
-The hosted alpha is limited to local Anvil and Ethereum Sepolia. Mainnet deployment, signing, and broadcasting are disabled. The first release supports a finite committed sequence and ETH-transfer-only transaction envelopes. Dynamic commitment refill, QR transport, arbitrary contract calls, hardware signing, manual injected signers, funded Safe refunds, and production relaying remain disabled until their security gates are met.
+The hosted alpha is limited to local Anvil and Ethereum Sepolia. Mainnet deployment, signing, and broadcasting are disabled. V2 supports dynamically selected next owners without precommitment or a fixed rotation limit, and ETH-transfer-only transaction envelopes. QR transport, arbitrary contract calls, hardware signing, manual injected signers, funded Safe refunds, and production relaying remain disabled until their security gates are met.
 
 ## Brand Commitments
 

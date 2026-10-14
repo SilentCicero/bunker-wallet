@@ -10,27 +10,24 @@ interface ISafeView {
     function getModulesPaginated(address start, uint256 pageSize) external view returns (address[] memory array, address next);
 }
 
-/// @notice Unaudited fixed-sequence guard for local/Ethereum Sepolia testing only.
-/// @dev Dynamic refill, upgrades, modules, refunds, and arbitrary calls are intentionally absent.
+/// @notice Unaudited V2 dynamic owner guard for local/Ethereum Sepolia testing only.
+/// @dev A compromised current signer can substitute an attacker-controlled fresh owner.
 contract BunkerRotationGuard is BaseGuard {
-    uint256 public constant BATCH_SIZE = 20;
-    uint256 public constant ORDINARY_ROTATION_LIMIT = 19; // index 19 remains reserved for audited migration.
+    uint256 public constant VERSION = 2;
     uint256 public constant NEXT_OWNER_GAS = 0.001 ether;
     address public constant SENTINEL = address(0x1);
     bytes4 private constant MULTISEND = bytes4(keccak256("multiSend(bytes)"));
     bytes4 private constant SWAP_OWNER = bytes4(keccak256("swapOwner(address,address,address)"));
-    bytes32 private constant DOMAIN = keccak256("BUNKER_OWNER_V1");
     uint256 private constant SECP256K1_HALF_N = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
-    struct State { bytes32 root; uint8 nextIndex; bool initialized; bool executing; }
+    struct State { address pendingOwner; uint256 rotationCount; bool initialized; bool executing; }
     address public immutable multiSendCallOnly;
     bytes32 public immutable multiSendCodeHash;
     mapping(address safe => State) public state;
-    mapping(address safe => mapping(uint256 index => address owner)) public committedOwner;
     mapping(address safe => mapping(address owner => bool used)) public consumed;
 
     error Policy();
-    event SequenceInitialized(address indexed safe, bytes32 indexed root);
+    event Initialized(address indexed safe, address indexed initialOwner);
     event RotationAuthorized(address indexed safe, uint256 indexed index, address indexed nextOwner);
 
     constructor(address _multiSendCallOnly, bytes32 _multiSendCodeHash) {
@@ -39,39 +36,32 @@ contract BunkerRotationGuard is BaseGuard {
     }
 
     /// @dev Must be called by the Safe during atomic setup before it is funded.
-    function initialize(address[20] calldata owners) external {
+    function initialize() external {
         State storage s = state[msg.sender]; if (s.initialized) revert Policy();
         address[] memory currentOwners = ISafeView(msg.sender).getOwners();
         if (currentOwners.length != 1 || ISafeView(msg.sender).getThreshold() != 1) revert Policy();
         address currentOwner = currentOwners[0];
-        if (currentOwner == SENTINEL || currentOwner == msg.sender || currentOwner.code.length != 0) revert Policy();
-        bytes32[] memory level = new bytes32[](32);
-        for (uint256 i; i < BATCH_SIZE; ++i) {
-            address owner = owners[i]; if (owner == address(0) || owner == SENTINEL || owner == msg.sender || owner == currentOwner || owner.code.length != 0 || consumed[msg.sender][owner]) revert Policy();
-            consumed[msg.sender][owner] = true; committedOwner[msg.sender][i] = owner;
-            level[i] = keccak256(abi.encodePacked(bytes1(0), DOMAIN, block.chainid, msg.sender, uint32(1), uint8(i), owner));
-        }
-        bytes32 empty = keccak256(hex"02"); for (uint256 i=BATCH_SIZE;i<32;++i) level[i]=empty;
-        for (uint256 width=32;width>1;width/=2) for(uint256 i;i<width;i+=2) level[i/2]=keccak256(abi.encodePacked(bytes1(0x01),level[i],level[i+1]));
-        s.root=level[0];s.initialized=true;emit SequenceInitialized(msg.sender,level[0]);
+        if (currentOwner == address(0) || currentOwner == SENTINEL || currentOwner == msg.sender || currentOwner.code.length != 0) revert Policy();
+        consumed[msg.sender][currentOwner] = true;
+        s.initialized = true;
+        emit Initialized(msg.sender, currentOwner);
     }
 
-    function rotationsRemaining(address safe) external view returns (uint256) { uint256 i=state[safe].nextIndex; return i>=ORDINARY_ROTATION_LIMIT?0:ORDINARY_ROTATION_LIMIT-i; }
 
     function checkTransaction(address to,uint256 value,bytes memory data,Enum.Operation operation,uint256,uint256 baseGas,uint256 gasPrice,address gasToken,address payable refundReceiver,bytes memory signatures,address) external override {
         State storage s=state[msg.sender];
         if(!s.initialized||s.executing||to!=multiSendCallOnly||value!=0||operation!=Enum.Operation.DelegateCall||baseGas!=0||gasPrice!=0||gasToken!=address(0)||refundReceiver!=address(0))revert Policy();
-        if(multiSendCallOnly.codehash!=multiSendCodeHash||signatures.length!=65||s.nextIndex>=ORDINARY_ROTATION_LIMIT)revert Policy();
+        if(multiSendCallOnly.codehash!=multiSendCodeHash||signatures.length!=65)revert Policy();
         uint256 sigS;uint8 sigV;assembly{sigS:=mload(add(signatures,0x40)) sigV:=byte(0,mload(add(signatures,0x60)))}if(sigS>SECP256K1_HALF_N||(sigV!=27&&sigV!=28))revert Policy();
-        (address current,address next)=_parseBatch(data,msg.sender);address expected=committedOwner[msg.sender][s.nextIndex];if(next!=expected||current==next||current.code.length!=0||next.code.length!=0)revert Policy();
+        (address current,address next)=_parseBatch(data,msg.sender);if(next==address(0)||next==SENTINEL||next==msg.sender||consumed[msg.sender][next]||current==next||current.code.length!=0||next.code.length!=0)revert Policy();
         address[] memory owners=ISafeView(msg.sender).getOwners();if(owners.length!=1||owners[0]!=current||ISafeView(msg.sender).getThreshold()!=1)revert Policy();
         (address[] memory modules,address cursor)=ISafeView(msg.sender).getModulesPaginated(SENTINEL,1);if(modules.length!=0||cursor!=SENTINEL)revert Policy();
-        s.executing=true;emit RotationAuthorized(msg.sender,s.nextIndex,next);
+        s.executing=true;s.pendingOwner=next;emit RotationAuthorized(msg.sender,s.rotationCount,next);
     }
 
     function checkAfterExecution(bytes32,bool success) external override {
-        State storage s=state[msg.sender];if(!s.executing||!success)revert Policy();address expected=committedOwner[msg.sender][s.nextIndex];address[] memory owners=ISafeView(msg.sender).getOwners();if(owners.length!=1||owners[0]!=expected||ISafeView(msg.sender).getThreshold()!=1)revert Policy();
-        (address[] memory modules,address cursor)=ISafeView(msg.sender).getModulesPaginated(SENTINEL,1);if(modules.length!=0||cursor!=SENTINEL)revert Policy();unchecked{++s.nextIndex;}s.executing=false;
+        State storage s=state[msg.sender];if(!s.executing||!success)revert Policy();address expected=s.pendingOwner;address[] memory owners=ISafeView(msg.sender).getOwners();if(owners.length!=1||owners[0]!=expected||expected.code.length!=0||ISafeView(msg.sender).getThreshold()!=1)revert Policy();
+        (address[] memory modules,address cursor)=ISafeView(msg.sender).getModulesPaginated(SENTINEL,1);if(modules.length!=0||cursor!=SENTINEL)revert Policy();consumed[msg.sender][expected]=true;++s.rotationCount;s.pendingOwner=address(0);s.executing=false;
     }
 
     function _parseBatch(bytes memory outer,address safe) private pure returns(address current,address next){

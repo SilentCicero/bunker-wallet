@@ -3,7 +3,7 @@ import { isAddress, parseEther } from "viem";
 import { mnemonicToAccount } from "viem/accounts";
 import { validMnemonic } from "../packages/vault/src";
 import { createBurnerSession, readSepoliaBalance } from "../apps/web/src/burner";
-const { clearEphemeralBurner, demoSendETH, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
+const { recoverSigner, clearEphemeralBurner, demoSendETH, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 async function main() {
   if (process.env.BUNKER_E2E_LIVE !== "1" || process.env.BUNKER_SEPOLIA_CHAIN_ID !== "11155111") throw new Error("Live Sepolia funding is disabled.");
@@ -14,11 +14,12 @@ async function main() {
   const manifest = await Bun.file(manifestPath).json() as { safe?: `0x${string}`; rotationIndex?: number; [key: string]: unknown };
   if (!manifest.safe || manifest.rotationIndex === undefined) throw new Error("Protected E2E manifest is incomplete.");
 
-  loadMnemonicSigner(mnemonic, manifest.rotationIndex);
+  if (manifest.schema !== 2) throw new Error("V2 sponsor manifest required.");
   const before = await readSafeWallet(manifest.safe);
+  const derivationIndex = recoverSigner(mnemonic, before.owner, Number(process.env.BUNKER_RECOVERY_START ?? 0), 1000);
   if (before.index !== manifest.rotationIndex) throw new Error("Sponsor Safe index mismatch.");
   await verifyRecoverySequence(manifest.safe);
-  const nextOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${before.index + 1}` }).address;
+  const nextOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${derivationIndex + 1}` }).address;
   const [recipientBefore, nextOwnerBefore] = await Promise.all([readSepoliaBalance(recipient), readSepoliaBalance(nextOwner)]);
   const amount = parseEther("0.035");
   await demoSendETH(manifest.safe, recipient, amount);
