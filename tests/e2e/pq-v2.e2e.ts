@@ -1,0 +1,885 @@
+import { test, expect, type Page } from '@playwright/test';
+import { mnemonicToAccount } from 'viem/accounts';
+import { entropyToMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english.js';
+const enabled = process.env.BROWSER_PQ_V2_E2E === '1',
+  RPC = 'http://127.0.0.1:18545';
+async function rpc(method: string, params: unknown[] = []) {
+  const r = await fetch(RPC, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message);
+  return j.result;
+}
+async function newWallet(page: Page, mode: 'Quantum Shield' | 'Maximum') {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create wallet (Testnet)' }).click();
+  await page
+    .getByRole('slider', { name: 'Signing mode' })
+    .fill(mode === 'Quantum Shield' ? '1' : '2');
+  await expect(page.locator('.security-gas')).toContainText(
+    mode === 'Quantum Shield' ? '~11.27M setup / ~940k sending' : '~44.59M setup / ~2.01M sending',
+  );
+  await expect(page.locator('.security-ticks small')).toHaveText([
+    'Non-experimental',
+    'Experimental',
+    'Experimental',
+  ]);
+  await page.getByText('Read details').click();
+  await expect(page.locator('.security-details')).toContainText(
+    mode === 'Quantum Shield' ? 'gas across 1 transaction.' : 'gas across 2 transactions.',
+  );
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  const phrase = (await page.locator('.words li').allTextContents())
+    .map((word) => word.replace(/^\d+/, ''))
+    .join(' ');
+  await page.getByLabel('I saved the phrase offline.').check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+  await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+  const panel = page.getByRole('region', { name: 'Experimental PQ wallet' });
+  await expect(panel.getByText('Setup address', { exact: true })).toBeVisible({ timeout: 30000 });
+  const record = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(record.parts.ExperimentalSharedFactoryV2).toBe(
+    process.env.VITE_EXPERIMENTAL_V2_LOCAL_FACTORY,
+  );
+  expect(record.parts.ExperimentalFactory).toBeUndefined();
+  await expect(panel.getByRole('note')).toContainText('Send at least 0.03 test ETH');
+  await expect(panel.getByText('The setup key pays deployment gas and Safe funding.')).toBeHidden();
+  await panel.getByText('Why this amount? Read more').click();
+  await expect(
+    panel.getByText('The setup key pays deployment gas and Safe funding.'),
+  ).toBeVisible();
+  const setup = await panel
+    .getByText('Setup address', { exact: true })
+    .locator('..')
+    .locator('code')
+    .textContent();
+  await rpc('anvil_setBalance', [setup, '0x6a94d74f430000']);
+  await panel.getByRole('button', { name: 'I funded it — check balance' }).click();
+  return { panel, phrase };
+}
+test('@V2 valid pending checkpoint offers restore or acknowledged archive and fresh phrase', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  await page.goto('/');
+  const raw = JSON.stringify({
+      version: 1,
+      chainId: 11155111,
+      mode: 'c10',
+      account: 0,
+      index: 0,
+      epoch: 0,
+      ecSequenceVersion: 1,
+      publicKey: '0x' + '11'.repeat(32),
+      parts: {},
+      pending: {
+        kind: 'createV2',
+        hash: '0x' + 'ab'.repeat(32),
+        sealed: { iv: '0x' + '12'.repeat(12), ciphertext: '0x' + '34'.repeat(16) },
+      },
+    }),
+    vault = '{"encrypted":"synthetic-private-vault"}';
+  await page.evaluate(
+    ([record, backup]) => {
+      localStorage.setItem('bunker-experimental-wallet-v1', record);
+      localStorage.setItem('bunker-experimental-vault-v1', backup);
+    },
+    [raw, vault] as const,
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  expect(await page.getByRole('button', { name: 'Create wallet', exact: true }).count()).toBe(0);
+  expect(
+    await page.locator('.advanced .replace-wallet').getByRole('button', { name: 'Cancel' }).count(),
+  ).toBe(1);
+  const choices = page.getByRole('group', { name: 'Pending saved experimental setup' });
+  await expect(choices).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create wallet', exact: true })).toHaveCount(0);
+  await expect(
+    choices.getByRole('button', { name: 'Continue — archive local record & create new' }),
+  ).toBeDisabled();
+  await expect(
+    choices.getByRole('link', { name: 'Inspect the original transaction' }),
+  ).toHaveAttribute('href', 'https://sepolia.etherscan.io/tx/0x' + 'ab'.repeat(32));
+  await choices.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('heading', { name: 'One address.' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1'))).toBe(
+    raw,
+  );
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  await expect(choices).toBeVisible();
+  await choices.getByRole('button', { name: 'Recover / resolve saved setup' }).click();
+  await expect(page.getByRole('heading', { name: 'Recover your wallet.' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1'))).toBe(
+    raw,
+  );
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  await expect(choices).toBeVisible();
+  let broadcasts = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      if (route.request().postDataJSON()?.method === 'eth_sendRawTransaction') broadcasts++;
+      await route.continue();
+    },
+  );
+  await choices.getByRole('checkbox').check();
+  await choices
+    .getByRole('button', { name: 'Continue — archive local record & create new' })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+  const archived = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) =>
+      k.startsWith('bunker-experimental-archive-v1:'),
+    );
+    return {
+      copy: key ? JSON.parse(localStorage.getItem(key)!) : null,
+      record: localStorage.getItem('bunker-experimental-wallet-v1'),
+      vault: localStorage.getItem('bunker-experimental-vault-v1'),
+    };
+  });
+  expect(archived.copy.checkpoint).toBe(raw);
+  expect(archived.copy.vault).toBe(vault);
+  expect(archived.record).toBeNull();
+  expect(archived.vault).toBeNull();
+  expect(broadcasts).toBe(0);
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+  await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Experimental PQ wallet' })
+      .getByText('Setup address', { exact: true }),
+  ).toBeVisible({ timeout: 30000 });
+  const fresh = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(fresh.mode).toBe('c10');
+  expect(fresh.pending).toBeUndefined();
+  expect(fresh.publicKey).not.toBe('0x' + '11'.repeat(32));
+  expect(broadcasts).toBe(0);
+});
+test('@V2 corrupt checkpoint offers export, recovery and explicit archive without broadcasting', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  await page.goto('/');
+  const raw = JSON.stringify({
+      version: 1,
+      parts: [],
+      pending: {
+        kind: 'send',
+        hash: '0x' + 'ab'.repeat(32),
+        sealed: { ciphertext: 'sealed-intent' },
+      },
+    }),
+    vault = '{"encrypted":"private-vault"}';
+  await page.evaluate(
+    ([record, backup]) => {
+      localStorage.setItem('bunker-experimental-wallet-v1', record);
+      localStorage.setItem('bunker-experimental-vault-v1', backup);
+    },
+    [raw, vault] as const,
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  const options = page.getByRole('group', { name: 'Unverified saved experimental setup' });
+  await expect(options).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await expect(
+    options.getByRole('link', { name: 'Inspect the original transaction' }),
+  ).toHaveAttribute('href', 'https://sepolia.etherscan.io/tx/0x' + 'ab'.repeat(32));
+  await expect(
+    options.getByRole('button', { name: 'Continue — archive local record & create new' }),
+  ).toBeDisabled();
+  expect(await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1'))).toBe(
+    raw,
+  );
+  const downloadPromise = page.waitForEvent('download');
+  await options.getByRole('button', { name: 'Download private checkpoint copy' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('bunker-experimental-checkpoint-private.json');
+  const stream = await download.createReadStream(),
+    chunks: Uint8Array[] = [];
+  for await (const chunk of stream) chunks.push(chunk as Uint8Array);
+  expect(JSON.parse(Buffer.concat(chunks).toString()).checkpoint).toBe(raw);
+  await options.getByRole('button', { name: 'Recover wallet' }).click();
+  await expect(page.getByRole('heading', { name: 'Recover your wallet.' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1'))).toBe(
+    raw,
+  );
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  await expect(options).toBeVisible();
+  await options.getByRole('checkbox').check();
+  let broadcasts = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      if (route.request().postDataJSON()?.method === 'eth_sendRawTransaction') broadcasts++;
+      await route.continue();
+    },
+  );
+  await options
+    .getByRole('button', { name: 'Continue — archive local record & create new' })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+  expect(broadcasts).toBe(0);
+  const archived = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) =>
+      k.startsWith('bunker-experimental-archive-v1:'),
+    );
+    return {
+      backup: key ? JSON.parse(localStorage.getItem(key)!) : null,
+      record: localStorage.getItem('bunker-experimental-wallet-v1'),
+      vault: localStorage.getItem('bunker-experimental-vault-v1'),
+    };
+  });
+  expect(archived.backup.checkpoint).toBe(raw);
+  expect(archived.backup.vault).toBe(vault);
+  expect(archived.record).toBeNull();
+  expect(archived.vault).toBeNull();
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+});
+test('@V2 a vault without a checkpoint is archived before starting anew', async ({ page }) => {
+  test.skip(!enabled);
+  await page.goto('/');
+  const vault = '{"encrypted":"vault-only"}';
+  await page.evaluate(
+    (value) => localStorage.setItem('bunker-experimental-vault-v1', value),
+    vault,
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  const options = page.getByRole('group', { name: 'Unverified saved experimental setup' });
+  await expect(options).toBeVisible();
+  await options.getByRole('checkbox').check();
+  await options
+    .getByRole('button', { name: 'Continue — archive local record & create new' })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+  const state = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) =>
+      k.startsWith('bunker-experimental-archive-v1:'),
+    );
+    return {
+      backup: key ? JSON.parse(localStorage.getItem(key)!) : null,
+      vault: localStorage.getItem('bunker-experimental-vault-v1'),
+    };
+  });
+  expect(state.backup.checkpoint).toBeNull();
+  expect(state.backup.vault).toBe(vault);
+  expect(state.vault).toBeNull();
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+});
+test('@V2 a concurrent foreign vault cannot be paired with a new PQ checkpoint', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  test.setTimeout(60000);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create wallet (Testnet)' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  const phrase = (await page.locator('.words li').allTextContents())
+    .map((word) => word.replace(/^\d+/, ''))
+    .join(' ');
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+  await page.evaluate(() => {
+    const original = crypto.subtle.encrypt.bind(crypto.subtle);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    (window as any).__releasePQVault = release;
+    (crypto.subtle as any).encrypt = async (...args: Parameters<typeof original>) => {
+      if ((args[0] as AesGcmParams).additionalData) {
+        (window as any).__enteredPQVault = true;
+        await gate;
+      }
+      return original(...args);
+    };
+  });
+  await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+  await expect
+    .poll(() => page.evaluate(() => Boolean((window as any).__enteredPQVault)), { timeout: 15000 })
+    .toBe(true);
+  const foreign = '{"foreign":"synthetic-not-a-wallet"}';
+  await page.evaluate((value) => {
+    localStorage.setItem('bunker-experimental-vault-v1', value);
+    (window as any).__releasePQVault();
+  }, foreign);
+  await expect(
+    page.getByRole('region', { name: 'Experimental PQ wallet' }).getByRole('alert'),
+  ).toContainText('Another tab saved a vault');
+  expect(await page.evaluate(() => localStorage.getItem('bunker-experimental-vault-v1'))).toBe(
+    foreign,
+  );
+  expect(
+    await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1')),
+  ).toBeNull();
+  const stored = await page.evaluate(() =>
+    Object.entries(localStorage)
+      .map(([key, value]) => `${key}:${value}`)
+      .join('\n'),
+  );
+  expect(stored).not.toContain(phrase);
+  expect(stored).not.toContain('public-test-password');
+});
+for (const mode of ['Quantum Shield', 'Maximum'] as const)
+  test(`@V2 ${mode} encrypted setup resumes after refresh without asking for the phrase`, async ({
+    page,
+  }) => {
+    test.skip(!enabled);
+    test.setTimeout(60000);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create wallet (Testnet)' }).click();
+    await page.getByRole('button', { name: `Select ${mode}` }).click();
+    await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+    const phrase = (await page.locator('.words li').allTextContents())
+      .map((word) => word.replace(/^\d+/, ''))
+      .join(' ');
+    await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+    await page.getByRole('button', { name: 'Skip check' }).click();
+    await expect(page.getByRole('button', { name: 'Continue without password' })).toHaveCount(0);
+    await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+    await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+    const panel = page.getByRole('region', { name: 'Experimental PQ wallet' }),
+      address = await panel
+        .getByText('Setup address', { exact: true })
+        .locator('..')
+        .locator('code')
+        .textContent({ timeout: 30000 });
+    const stored = await page.evaluate(() => JSON.stringify(localStorage));
+    expect(stored).not.toContain(phrase);
+    expect(stored).not.toContain('public-test-password');
+    expect(
+      await page.evaluate(() => localStorage.getItem('bunker-experimental-vault-v1')),
+    ).toBeTruthy();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Recover your wallet.' })).toBeVisible();
+    await page.getByLabel('Experimental vault password').fill('public-test-password');
+    await page.getByRole('button', { name: 'Recover saved wallet' }).click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Experimental PQ wallet' })
+        .getByText('Setup address', { exact: true })
+        .locator('..')
+        .locator('code'),
+    ).toHaveText(address!, { timeout: 30000 });
+  });
+test('@V2 tapping each signing label moves the slider and updates mode details', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  const slider = page.getByRole('slider', { name: 'Signing mode' }),
+    choices = page.getByRole('group', { name: 'Choose signing mode' });
+  await expect(choices.getByRole('button')).toHaveCount(3);
+  for (const [name, value, summary, gas] of [
+    ['Quantum Shield', '1', 'SPHINCs+C10', '11.27M'],
+    ['Maximum', '2', 'ML-DSA-44', '44.59M'],
+    ['Standard', '0', 'No post-quantum signature', '2.93M'],
+  ] as const) {
+    await choices.getByRole('button', { name: `Select ${name}` }).click();
+    await expect(slider).toHaveValue(value);
+    await expect(choices.getByRole('button', { name: `Select ${name}` })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(page.locator('.security-summary')).toContainText(summary);
+    await expect(page.locator('.security-details')).toContainText(gas);
+    await expect(page.locator('.security-gas')).toContainText(gas);
+  }
+  await page.setViewportSize({ width: 320, height: 700 });
+  await choices.getByRole('button', { name: 'Select Maximum' }).click();
+  await expect(slider).toHaveValue('2');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+  expect(await page.locator('.site').evaluate((el) => getComputedStyle(el).touchAction)).toBe(
+    'manipulation',
+  );
+  expect(
+    await page
+      .locator('.advanced .security-selector + .secure-actions')
+      .evaluate((el) => getComputedStyle(el).marginTop),
+  ).toBe('16px');
+});
+test('@V2 breadcrumbs revisit only an unsaved draft, without changing its phrase or a saved checkpoint', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create wallet (Testnet)' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  const stepper = page.getByRole('list', { name: 'Sepolia wallet creation progress' }),
+    words = await page.locator('.words li').allTextContents();
+  expect(words).toHaveLength(24);
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('confirm');
+    await dialog.dismiss();
+  });
+  await stepper.getByRole('button', { name: 'Return to Choose signing mode' }).click();
+  expect(await page.locator('.words li').allTextContents()).toEqual(words);
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Check my backup' }).click();
+  await stepper.getByRole('button', { name: 'Return to Back up recovery phrase' }).click();
+  expect(await page.locator('.words li').allTextContents()).toEqual(words);
+  await expect(
+    page.getByRole('checkbox', { name: 'I saved the phrase offline.' }),
+  ).not.toBeChecked();
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await stepper.getByRole('button', { name: 'Return to Back up recovery phrase' }).click();
+  expect(await page.locator('.words li').allTextContents()).toEqual(words);
+  await expect(
+    page.getByRole('checkbox', { name: 'I saved the phrase offline.' }),
+  ).not.toBeChecked();
+  page.once('dialog', async (dialog) => {
+    expect(dialog.type()).toBe('confirm');
+    await dialog.accept();
+  });
+  await stepper.getByRole('button', { name: 'Return to Choose signing mode' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose how to sign.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  expect(await page.locator('.words li').allTextContents()).not.toEqual(words);
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByRole('button', { name: 'Continue without password' }).click();
+  await expect(page.getByRole('heading', { name: 'Add Ethereum Sepolia test ETH.' })).toBeVisible();
+  await expect(stepper.getByRole('button')).toHaveCount(0);
+  await expect(page.locator('.stepper-hint')).toContainText('Earlier steps cannot be reopened');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => JSON.parse(localStorage.getItem('bunker-standard-setup-v1') ?? 'null')?.state,
+      ),
+    )
+    .toBe('ready');
+});
+for (const mode of ['Quantum Shield', 'Maximum'] as const)
+  test(`@V2 ${mode} selected-only shared setup, funding and recovery`, async ({ page }) => {
+    test.skip(!enabled);
+    test.setTimeout(100000);
+    const { panel, phrase } = await newWallet(page, mode),
+      total = mode === 'Quantum Shield' ? 1 : 2;
+    await expect(panel.getByLabel('Safe setup transactions').locator('li')).toHaveCount(total);
+    await expect(panel.getByLabel('Safe setup transactions').locator('li').first()).toBeHidden();
+    await panel.getByText('View all setup transactions').click();
+    await expect(panel.getByLabel('Safe setup transactions').locator('li').first()).toBeVisible();
+    await panel.getByText('View all setup transactions').click();
+    await expect(
+      page.getByRole('list', { name: 'Sepolia wallet creation progress' }).getByRole('button'),
+    ).toHaveCount(0);
+    await expect(
+      panel.getByText('Shared Sepolia factory and verifiers are already deployed.'),
+    ).toBeHidden();
+    await panel.getByText('How this setup works').click();
+    await expect(
+      panel.getByText('Shared Sepolia factory and verifiers are already deployed.'),
+    ).toBeVisible();
+    await panel.getByText('How this setup works').click();
+    await page.setViewportSize({ width: 320, height: 700 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    const rows = await panel.getByLabel('Safe setup transactions').locator('li').allTextContents();
+    expect(rows.join(' ')).not.toMatch(
+      /Deploy C10 verifier|Deploy ML-DSA verifier|Deploy ML-DSA helper|Fund Safe/,
+    );
+    if (mode === 'Quantum Shield') expect(rows.join(' ')).not.toContain('prepared key blob');
+    else expect(rows[0]).toContain('prepared key blob');
+    let broadcasts = 0;
+    await page.context().route(
+      (url) => url.origin === RPC,
+      async (route) => {
+        const body = route.request().postDataJSON() as { method?: string };
+        if (body.method === 'eth_sendRawTransaction') broadcasts++;
+        await route.continue();
+      },
+    );
+    await panel.getByRole('button', { name: 'Create Safe wallet' }).click();
+    await expect(panel.getByRole('button', { name: 'Send + rotate key' })).toBeEnabled({
+      timeout: 80000,
+    });
+    expect(broadcasts).toBe(total);
+    const record = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+    );
+    expect(record.safe).toBeTruthy();
+    expect(record.pending).toBeUndefined();
+    expect(BigInt(await rpc('eth_getBalance', [record.safe, 'latest']))).toBe(10000000000000000n);
+    await page.evaluate(() =>
+      localStorage.setItem(
+        'bunker-experimental-archive-v1:previous',
+        JSON.stringify({
+          version: 1,
+          checkpoint: JSON.stringify({
+            publicKey: '0x' + '11'.repeat(32),
+            pending: { hash: '0x' + 'ab'.repeat(32) },
+          }),
+          vault: null,
+        }),
+      ),
+    );
+    await panel.getByRole('button', { name: 'Lock / cancel' }).click();
+    await page.getByRole('button', { name: 'Recover wallet' }).click();
+    await page.getByLabel('24-word recovery phrase').fill(phrase);
+    await page.getByLabel('Existing Safe address').fill(record.safe);
+    await page.getByLabel('Browser password · 12–256 characters').fill('public-test-password');
+    await page.getByRole('button', { name: 'Recover and save wallet' }).click();
+    await expect(
+      page
+        .getByRole('region', { name: 'Experimental PQ wallet' })
+        .getByRole('button', { name: 'Send + rotate key' }),
+    ).toBeEnabled({ timeout: 30000 });
+    expect(broadcasts).toBe(total);
+  });
+test('@V2 replacing a recovered Safe reaches a new setup without rebroadcast', async ({ page }) => {
+  test.skip(!enabled);
+  test.setTimeout(100000);
+  const { panel, phrase } = await newWallet(page, 'Quantum Shield');
+  await panel.getByRole('button', { name: 'Create Safe wallet' }).click();
+  await expect(panel.getByRole('button', { name: 'Send + rotate key' })).toBeEnabled({
+    timeout: 80000,
+  });
+  const old = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  await panel.getByRole('button', { name: 'Lock / cancel' }).click();
+  await page.getByRole('button', { name: 'Recover wallet' }).click();
+  await page.getByLabel('24-word recovery phrase').fill(phrase);
+  await page.getByLabel('Existing Safe address').fill(old.safe);
+  await page.getByLabel('Browser password · 12–256 characters').fill('public-test-password');
+  await page.getByRole('button', { name: 'Recover and save wallet' }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Experimental PQ wallet' })
+      .getByRole('button', { name: 'Send + rotate key' }),
+  ).toBeEnabled({ timeout: 30000 });
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  const choice = page.getByRole('group', { name: 'Replace saved test wallet' });
+  await expect(choice).toBeVisible();
+  await choice.getByRole('checkbox').check();
+  let broadcasts = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      if (route.request().postDataJSON()?.method === 'eth_sendRawTransaction') broadcasts++;
+      await route.continue();
+    },
+  );
+  await choice.getByRole('button', { name: 'Continue — replace local wallet' }).click();
+  await expect(page.getByRole('heading', { name: 'Write down these 24 words.' })).toBeVisible();
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+  await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+  const fresh = page.getByRole('region', { name: 'Experimental PQ wallet' });
+  await expect(fresh.getByText('Setup address', { exact: true })).toBeVisible({ timeout: 30000 });
+  const record = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(record.safe).toBeUndefined();
+  expect(record.pending).toBeUndefined();
+  expect(record.publicKey).not.toBe(old.publicKey);
+  expect(broadcasts).toBe(0);
+});
+test('@V2 fresh bootstrap times out safely and retries after RPC recovers', async ({ page }) => {
+  test.skip(!enabled);
+  test.setTimeout(30000);
+  await page.addInitScript(() => {
+    const timer = window.setTimeout;
+    window.setTimeout = ((handler: TimerHandler, delay?: number, ...args: unknown[]) =>
+      timer(handler, delay === 30_000 ? 3_000 : delay, ...args)) as typeof window.setTimeout;
+  });
+  let release!: () => void,
+    held = 0,
+    blocked = true;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      const request = route.request().postDataJSON() as { method?: string };
+      if (request.method === 'eth_getBalance' && blocked) {
+        held++;
+        await gate;
+      }
+      await route.continue();
+    },
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Setup options' }).click();
+  await page.getByRole('button', { name: 'Select Quantum Shield' }).click();
+  await page.getByRole('button', { name: 'Create wallet', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'I saved the phrase offline.' }).check();
+  await page.getByRole('button', { name: 'Skip check' }).click();
+  await page.getByLabel('Password · 12 characters minimum').fill('public-test-password');
+  await page.getByRole('button', { name: 'Encrypt and save this browser' }).click();
+  const panel = page.getByRole('region', { name: 'Experimental PQ wallet' });
+  await expect(panel.getByRole('status')).toContainText('Preparing your new wallet');
+  await expect.poll(() => held, { timeout: 2500 }).toBeGreaterThan(0);
+  await expect(panel.getByRole('alert')).toContainText('Wallet preparation took too long', {
+    timeout: 6000,
+  });
+  const checkpoint = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(checkpoint.mode).toBe('c10');
+  expect(checkpoint.pending).toBeUndefined();
+  blocked = false;
+  release();
+  await panel.getByRole('button', { name: 'Retry new wallet setup' }).click();
+  await expect(panel.getByText('Setup address', { exact: true })).toBeVisible({ timeout: 15000 });
+});
+test('@V2 corrupt local checkpoint is archived before attested Safe recovery', async ({ page }) => {
+  test.skip(!enabled);
+  test.setTimeout(100000);
+  const { panel, phrase } = await newWallet(page, 'Quantum Shield');
+  await panel.getByRole('button', { name: 'Create Safe wallet' }).click();
+  await expect(panel.getByRole('button', { name: 'Send + rotate key' })).toBeEnabled({
+    timeout: 80000,
+  });
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  await panel.getByRole('button', { name: 'Lock / cancel' }).click();
+  const raw = await page.evaluate(() => {
+    const record = JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!);
+    record.parts = [];
+    const value = JSON.stringify(record);
+    localStorage.setItem('bunker-experimental-wallet-v1', value);
+    return value;
+  });
+  let broadcasts = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      if (route.request().postDataJSON()?.method === 'eth_sendRawTransaction') broadcasts++;
+      await route.continue();
+    },
+  );
+  await page.getByRole('button', { name: 'Recover wallet' }).click();
+  await page.getByLabel('24-word recovery phrase').fill(phrase);
+  await page.getByLabel('Existing Safe address').fill(saved.safe);
+  await page.getByLabel('Browser password · 12–256 characters').fill('public-test-password');
+  await page.getByRole('button', { name: 'Recover and save wallet' }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Experimental PQ wallet' })
+      .getByRole('button', { name: 'Send + rotate key' }),
+  ).toBeEnabled({ timeout: 30000 });
+  expect(broadcasts).toBe(0);
+  const recovery = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) =>
+      k.startsWith('bunker-experimental-archive-v1:'),
+    );
+    return {
+      archive: key ? JSON.parse(localStorage.getItem(key)!) : null,
+      record: JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+    };
+  });
+  expect(recovery.archive.checkpoint).toBe(raw);
+  expect(recovery.record.safe.toLowerCase()).toBe(saved.safe.toLowerCase());
+  expect(recovery.record.parts.ExperimentalSharedFactoryV2).toBeTruthy();
+});
+test('@V2 malformed pending hash permits attested read-only recovery across reloads', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  test.setTimeout(100000);
+  const { panel, phrase } = await newWallet(page, 'Quantum Shield');
+  await panel.getByRole('button', { name: 'Create Safe wallet' }).click();
+  await expect(panel.getByRole('button', { name: 'Send + rotate key' })).toBeEnabled({
+    timeout: 80000,
+  });
+  const safe = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!).safe,
+  );
+  await panel.getByRole('button', { name: 'Lock / cancel' }).click();
+  const raw = await page.evaluate(() => {
+    const r = JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!);
+    r.parts = [];
+    r.pending = {
+      kind: 'send',
+      hash: '0x' + 'ab'.repeat(32),
+      sealed: { ciphertext: 'preserve-original' },
+    };
+    const value = JSON.stringify(r);
+    localStorage.setItem('bunker-experimental-wallet-v1', value);
+    return value;
+  });
+  let broadcasts = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      if (route.request().postDataJSON()?.method === 'eth_sendRawTransaction') broadcasts++;
+      await route.continue();
+    },
+  );
+  const recover = async () => {
+    await page.getByRole('button', { name: 'Recover wallet' }).click();
+    await page.getByLabel('24-word recovery phrase').fill(phrase);
+    await page.getByLabel('Existing Safe address').fill(safe);
+    await page.getByLabel('Browser password · 12–256 characters').fill('public-test-password');
+    await page.getByRole('button', { name: 'Recover and save wallet' }).click();
+  };
+  await recover();
+  const readonly = page.getByRole('region', { name: 'Experimental PQ wallet' });
+  await expect(readonly.getByRole('heading', { name: 'Read-only Safe recovery' })).toBeVisible({
+    timeout: 30000,
+  });
+  await expect(
+    readonly.getByRole('link', { name: 'Inspect the original transaction' }),
+  ).toHaveAttribute('href', 'https://sepolia.etherscan.io/tx/0x' + 'ab'.repeat(32));
+  for (const action of [
+    'Create Safe wallet',
+    'Fund Safe',
+    'Send + rotate key',
+    'Renew signing keys',
+    'Rebroadcast same signed transaction',
+  ])
+    await expect(readonly.getByRole('button', { name: action })).toHaveCount(0);
+  expect(broadcasts).toBe(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem('bunker-experimental-wallet-v1')),
+  ).toBeNull();
+  expect(
+    await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) =>
+        k.startsWith('bunker-experimental-archive-v1:'),
+      );
+      return key ? JSON.parse(localStorage.getItem(key)!).checkpoint : null;
+    }),
+  ).toBe(raw);
+  await page.reload();
+  await recover();
+  await expect(page.getByRole('heading', { name: 'Read-only Safe recovery' })).toBeVisible({
+    timeout: 30000,
+  });
+  await expect(page.getByRole('button', { name: 'Send + rotate key' })).toHaveCount(0);
+  expect(broadcasts).toBe(0);
+});
+test('@V2 a V1 Safe recovered in a fresh browser stays on its V1 factory', async ({ page }) => {
+  test.skip(!enabled);
+  test.setTimeout(90000);
+  const phrase = entropyToMnemonic(crypto.getRandomValues(new Uint8Array(32)), wordlist),
+    setup = mnemonicToAccount(phrase, { path: "m/44'/60'/7331'/0/0" }).address;
+  await page.goto('/');
+  await rpc('anvil_setBalance', [setup, '0x16345785d8a0000']); // disposable V1 fixture needs gas for separate deployments
+  const safe = await page.evaluate(async (words) => {
+    const path = '/src/pq/wallet.ts';
+    const { createExperimentalWallet } = await import(/* @vite-ignore */ path);
+    const w = createExperimentalWallet(() => {}, undefined, 'http://127.0.0.1:18545');
+    await w.open(words, 'c10');
+    const safe = await w.create();
+    await w.fund(10000000000000000n);
+    w.close();
+    return safe;
+  }, phrase);
+  await page.reload();
+  await page.getByRole('button', { name: 'Recover wallet' }).click();
+  await page.getByLabel('24-word recovery phrase').fill(phrase);
+  await page.getByLabel('Existing Safe address').fill(safe);
+  await page.getByLabel('Browser password · 12–256 characters').fill('public-test-password');
+  await page.getByRole('button', { name: 'Recover and save wallet' }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Experimental PQ wallet' })
+      .getByRole('button', { name: 'Send + rotate key' }),
+  ).toBeEnabled({ timeout: 30000 });
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(saved.parts.ExperimentalFactory).toBeTruthy();
+  expect(saved.parts.ExperimentalSharedFactoryV2).toBeUndefined();
+  expect(saved.safe.toLowerCase()).toBe(safe.toLowerCase());
+});
+test('@V2 existing V1 pending checkpoint keeps six steps and encrypted intent', async ({
+  page,
+}) => {
+  test.skip(!enabled);
+  test.setTimeout(65000);
+  const phrase = 'abandon '.repeat(23) + 'art',
+    setup = mnemonicToAccount(phrase, { path: "m/44'/60'/7331'/0/0" }).address;
+  await page.goto('/');
+  await rpc('anvil_setBalance', [setup, '0x6a94d74f430000']);
+  let sends = 0;
+  await page.context().route(
+    (url) => url.origin === RPC,
+    async (route) => {
+      const body = route.request().postDataJSON() as { method?: string; id?: number };
+      if (body.method === 'eth_sendRawTransaction') {
+        sends++;
+        await route.fulfill({
+          json: {
+            jsonrpc: '2.0',
+            id: body.id,
+            error: { code: -32000, message: 'simulated unknown original broadcast' },
+          },
+        });
+        return;
+      }
+      await route.continue();
+    },
+  );
+  await page.evaluate(async (words) => {
+    const path = '/src/pq/wallet.ts';
+    const { createExperimentalWallet } = await import(/* @vite-ignore */ path);
+    const w = createExperimentalWallet(
+      (r: unknown) => localStorage.setItem('bunker-experimental-wallet-v1', JSON.stringify(r)),
+      undefined,
+      'http://127.0.0.1:18545',
+    );
+    await w.open(words, 'c10');
+    try {
+      await w.create();
+    } catch {}
+    w.close();
+  }, phrase);
+  const before = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(before.pending?.kind).toBe('helper');
+  expect(before.pending?.sealed?.ciphertext).toBeTruthy();
+  expect(before.parts.ExperimentalSharedFactoryV2).toBeUndefined();
+  expect(sends).toBe(1);
+  await page.reload();
+  await page.getByRole('button', { name: 'Enter original phrase' }).click();
+  const panel = page.getByRole('region', { name: 'Experimental PQ wallet' });
+  await panel.getByLabel('Original 24-word phrase').fill(phrase);
+  await panel.getByRole('button', { name: 'Recover interrupted setup' }).click();
+  await expect(panel.getByLabel('Safe setup transactions').locator('li')).toHaveCount(6, {
+    timeout: 30000,
+  });
+  await expect(
+    panel.getByRole('button', { name: 'Check original transaction status' }),
+  ).toBeVisible();
+  const after = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('bunker-experimental-wallet-v1')!),
+  );
+  expect(after.pending).toEqual(before.pending);
+  expect(sends).toBe(1);
+});

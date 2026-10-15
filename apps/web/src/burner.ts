@@ -135,7 +135,9 @@ function recoverSigner(mnemonic: string, owner: Address, start = 0, count = 100)
 const storageAddress = (value?: Hex) => value ? (`0x${value.slice(-40)}` as Address) : ZERO;
 
 async function attestSafe(safe: Address, expectedOwner: Address, expectedGuard: Address) {
-  await Promise.all([checkedCode(safe, safeProxyRuntimeHash), checkedCode(expectedGuard, bunkerGuardRuntimeHash)]);
+  await checkedCode(safe, safeProxyRuntimeHash);
+  const guardCode = await publicClient.getCode({ address: expectedGuard });
+  if (!guardCode || keccak256(guardCode) !== bunkerGuardRuntimeHash) throw new Error("Unsupported Safe guard bytecode.");
   const [owners, threshold, modules, guardSlot, fallbackSlot, singletonSlot, guardState, multiSend, multiSendHash] = await Promise.all([
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getThreshold" }),
@@ -255,7 +257,7 @@ async function finalizeSafeWallet(safe: Address): Promise<Address> {
   return safe;
 }
 
-async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash: Hex) => void): Promise<Address> {
+async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash: Hex) => void, onFactoryHash?: (transactionHash: Hex) => void): Promise<Address> {
   const current = ownerAccount();
   const { account, client } = sponsorClient();
   const startingBalance = await publicClient.getBalance({ address: account.address });
@@ -271,6 +273,7 @@ async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash:
   const initializer = encodeFunctionData({ abi: safeAbi, functionName: "setup", args: [[current.address], 1n, helper, helperData, ZERO, ZERO, 0n, ZERO] });
   const saltNonce = BigInt(generatePrivateKey());
   const factoryHash = await client.writeContract({ address: SAFE_PROXY_FACTORY, abi: factoryAbi, functionName: "createChainSpecificProxyWithNonce", args: [SAFE_SINGLETON, initializer, saltNonce] });
+  onFactoryHash?.(factoryHash);
   const factoryReceipt = await publicClient.waitForTransactionReceipt({ hash: factoryHash });
   const event = parseEventLogs({ abi: factoryAbi, logs: factoryReceipt.logs, eventName: "ProxyCreation" })[0];
   if (factoryReceipt.status !== "success" || !event) throw new Error("Safe proxy deployment failed.");

@@ -1,5 +1,6 @@
 import { parseEther } from "viem";
 import { createBurnerSession, SEPOLIA_RPC } from "../apps/web/src/burner";
+import official from "../tests/fixtures/sepolia-safe-1.4.1.json";
 const { recoverSigner, selectNextSigner, clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 if (!SEPOLIA_RPC.includes("127.0.0.1") && !SEPOLIA_RPC.includes("localhost")) throw new Error("This smoke test must run against local Anvil.");
@@ -10,6 +11,9 @@ const rpc = async (method: string, params: unknown[]) => {
   return body.result;
 };
 
+if (await rpc("eth_chainId", []) !== "0xaa36a7") throw new Error("Expected disposable Sepolia-chain Anvil.");
+for (const code of Object.values(official.codes)) await rpc("anvil_setCode", [code.address, code.runtime]);
+
 const mnemonic = `${"abandon ".repeat(23)}art`;
 const setup = loadMnemonicSigner(mnemonic);
 await rpc("anvil_setBalance", [setup, `0x${parseEther("100").toString(16)}`]);
@@ -17,8 +21,6 @@ const safe = await deploySafeWallet();
 clearEphemeralBurner();
 const discovered = await readSafeWallet(safe);
 recoverSigner(mnemonic, discovered.owner);
-const recovered = discovered.owner;
-if (recovered.toLowerCase() !== discovered.owner.toLowerCase()) throw new Error("Mnemonic did not recover the active Safe owner.");
 await verifyRecoverySequence(safe);
 const before = await readSafeWallet(safe);
 const recipient = "0x000000000000000000000000000000000000beef";
