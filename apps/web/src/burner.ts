@@ -16,8 +16,7 @@ import {
 } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { mainnet, sepolia } from "viem/chains";
-import { bunkerGuardAbi, bunkerGuardRuntimeHash, bunkerSetupAbi, bunkerSetupBytecode, safeProxyRuntimeHash } from "./safeArtifacts";
-import { bunkerGuardAbi as bunkerGuardV3Abi, bunkerGuardBytecode as bunkerGuardV3Bytecode, bunkerGuardRuntimeHash as bunkerGuardV3RuntimeHash } from "./safeArtifactsV3";
+import { bunkerGuardAbi, bunkerGuardBytecode, bunkerGuardRuntimeHash, bunkerSetupAbi, bunkerSetupBytecode, safeProxyRuntimeHash } from "./safeArtifacts";
 
 export const SEPOLIA_CHAIN_ID = 11155111;
 export const SEPOLIA_RPC = import.meta.env.VITE_SEPOLIA_RPC || "https://ethereum-sepolia-rpc.publicnode.com";
@@ -72,6 +71,7 @@ export async function resolveRecipient(value: string, resolvers: EnsResolver[] =
   throw new Error("Couldn’t resolve this .eth name. Retry or paste the recipient’s 0x address.");
 }
 const mnemonicKey = (mnemonic: string, index: number) => {
+  if (!Number.isSafeInteger(index) || index < 0 || index >= 2 ** 31) throw new Error("Invalid derivation index.");
   const key = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${index}` }).getHdKey().privateKey;
   if (!key) throw new Error("Recovery key could not be derived.");
   return toHex(key);
@@ -85,7 +85,11 @@ let privateKey: Hex | undefined;
 let sponsorPrivateKey: Hex | undefined;
 let mnemonicSecret: string | undefined;
 let pendingPrivateKey: Hex | undefined;
-let futurePrivateKeys: Hex[] = [];
+let selected: {key: Hex; index: number; mnemonic: string | undefined} | undefined;
+let pendingSelection: typeof selected;
+let pendingHash: Hex | undefined;
+let pendingIntent: {safe: Address; to: Address; amount: bigint} | undefined;
+let writing = false;
 let ownerIndex = 0;
 let guardAddress: Address | undefined;
 const ownerAccount = () => { if (!privateKey) throw new Error("Create or load a testnet key first."); return privateKeyToAccount(privateKey); };
@@ -113,19 +117,27 @@ const deploy = async (abi: readonly unknown[], bytecode: Hex, args: readonly unk
   if (receipt.status !== "success" || !receipt.contractAddress) throw new Error("Safe component deployment failed.");
   return receipt.contractAddress;
 };
-const sequence = () => {
-  if (futurePrivateKeys.length === 20) return futurePrivateKeys;
-  futurePrivateKeys = mnemonicSecret
-    ? Array.from({ length: 20 }, (_, i) => mnemonicKey(mnemonicSecret!, i + 1))
-    : Array.from({ length: 20 }, () => generatePrivateKey());
-  return futurePrivateKeys;
-};
+function selectNextSigner(index = ownerIndex + 1, mnemonic = mnemonicSecret): Address {
+  if (writing || pendingPrivateKey) throw new Error("A rotation is pending.");
+  if (!Number.isSafeInteger(index) || index < 0 || index >= 2 ** 31) throw new Error("Invalid derivation index.");
+  selected = {key: mnemonic ? mnemonicKey(mnemonic, index) : generatePrivateKey(), index, mnemonic};
+  return privateKeyToAccount(selected.key).address;
+}
+function recoverSigner(mnemonic: string, owner: Address, start = 0, count = 100): number {
+  if (!Number.isSafeInteger(start) || start < 0 || !Number.isSafeInteger(count) || count < 1 || count > 1000 || start + count > 2 ** 31) throw new Error("Invalid recovery range (maximum 1000 keys).");
+  for (let i = start; i < start + count; i++) {
+    if (privateKeyToAccount(mnemonicKey(mnemonic, i)).address.toLowerCase() === owner.toLowerCase()) {
+      loadMnemonicSigner(mnemonic, i); return i;
+    }
+  }
+  throw new Error("Current owner not found in this recovery range. Check the phrase and index range; a switched seed requires its own backup.");
+}
 const storageAddress = (value?: Hex) => value ? (`0x${value.slice(-40)}` as Address) : ZERO;
 
 async function attestSafe(safe: Address, expectedOwner: Address, expectedGuard: Address) {
   await checkedCode(safe, safeProxyRuntimeHash);
   const guardCode = await publicClient.getCode({ address: expectedGuard });
-  if (!guardCode || !([bunkerGuardRuntimeHash, bunkerGuardV3RuntimeHash] as readonly Hex[]).includes(keccak256(guardCode))) throw new Error("Unsupported Safe guard bytecode.");
+  if (!guardCode || keccak256(guardCode) !== bunkerGuardRuntimeHash) throw new Error("Unsupported Safe guard bytecode.");
   const [owners, threshold, modules, guardSlot, fallbackSlot, singletonSlot, guardState, multiSend, multiSendHash] = await Promise.all([
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" }),
     publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getThreshold" }),
@@ -141,14 +153,28 @@ async function attestSafe(safe: Address, expectedOwner: Address, expectedGuard: 
   if (modules[0].length !== 0 || modules[1].toLowerCase() !== SENTINEL.toLowerCase()) throw new Error("Safe module verification failed.");
   if (storageAddress(guardSlot).toLowerCase() !== expectedGuard.toLowerCase() || storageAddress(fallbackSlot) !== ZERO || storageAddress(singletonSlot).toLowerCase() !== SAFE_SINGLETON.toLowerCase()) throw new Error("Safe storage verification failed.");
   if (multiSend.toLowerCase() !== MULTISEND_CALL_ONLY.toLowerCase() || multiSendHash !== MULTISEND_CODE_HASH) throw new Error("Guard policy verification failed.");
-  if (!guardState[2] || guardState[1] !== ownerIndex || guardState[3]) throw new Error("Guard state verification failed.");
+  if (!guardState[2] || guardState[3]) throw new Error("Guard state verification failed.");
 }
 
 async function reconcilePending(safe: Address) {
   if (!pendingPrivateKey) return;
+  if (!pendingIntent || pendingIntent.safe.toLowerCase() !== safe.toLowerCase()) throw new Error("Pending transfer belongs to a different Safe.");
+  if (!pendingHash) throw new Error("Broadcast status is uncertain. Recover using the on-chain owner before retrying.");
+  const receipt = await publicClient.getTransactionReceipt({ hash: pendingHash });
+  if (receipt.status !== "success") {
+    pendingPrivateKey = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined;
+    throw new Error("Ethereum Sepolia transaction reverted. Active signer unchanged.");
+  }
   const owners = await publicClient.readContract({ address: safe, abi: safeAbi, functionName: "getOwners" });
   const pendingOwner = privateKeyToAccount(pendingPrivateKey).address;
-  if (owners.length === 1 && owners[0]?.toLowerCase() === pendingOwner.toLowerCase()) { privateKey = pendingPrivateKey; sponsorPrivateKey = pendingPrivateKey; ownerIndex++; pendingPrivateKey = undefined; }
+  if (owners.length !== 1 || owners[0]?.toLowerCase() !== pendingOwner.toLowerCase()) throw new Error("Chain owner has moved. Recover the current signer before sending.");
+  if (!guardAddress) throw new Error("The Safe guard address is unavailable.");
+  await attestSafe(safe, pendingOwner, guardAddress);
+  const result = {...pendingIntent, hash: pendingHash};
+  privateKey = pendingPrivateKey; sponsorPrivateKey = pendingPrivateKey;
+  ownerIndex = pendingSelection!.index; mnemonicSecret = pendingSelection!.mnemonic;
+  selected = undefined; pendingPrivateKey = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined;
+  return result;
 }
 
 const packedCall = (to: Address, value: bigint, data: Hex = "0x") => concatHex([
@@ -159,14 +185,22 @@ const packedCall = (to: Address, value: bigint, data: Hex = "0x") => concatHex([
   data,
 ]);
 
-async function rotatedWrite(safe: Address, to: Address, amount: bigint): Promise<Hex> {
+async function rotatedWrite(safe: Address, to: Address, amount: bigint) {
+  if (writing) throw new Error("A rotation is already being prepared.");
+  writing = true;
+  try {
   if (!guardAddress) throw new Error("The Safe guard address is unavailable. Restore or restart setup.");
-  await reconcilePending(safe);
-  if (pendingPrivateKey) throw new Error("The previous owner rotation is still pending. Wait for confirmation before sending again.");
+  if (pendingPrivateKey) {
+    // Return the original intent, never the new form values or a second send.
+    return (await reconcilePending(safe))!;
+  }
   const current = ownerAccount();
-  const next = sequence()[ownerIndex];
-  if (!next) throw new Error("The fixed owner sequence is exhausted.");
+  selected ??= {key: mnemonicSecret ? mnemonicKey(mnemonicSecret, ownerIndex + 1) : generatePrivateKey(), index: ownerIndex + 1, mnemonic: mnemonicSecret};
+  const next = selected.key;
   const nextOwner = privateKeyToAccount(next).address;
+  await attestSafe(safe, current.address, guardAddress);
+  if (amount <= 0n || !isAddress(to) || to === ZERO || to.toLowerCase() === safe.toLowerCase()) throw new Error("Invalid ETH transfer.");
+  if (await publicClient.readContract({address: guardAddress, abi: bunkerGuardAbi, functionName: "consumed", args: [safe, nextOwner]})) throw new Error("Next signer was already consumed. Select a fresh index or seed.");
   const swapData = encodeFunctionData({ abi: safeAbi, functionName: "swapOwner", args: [SENTINEL, current.address, nextOwner] });
   const batch = concatHex([packedCall(to, amount), packedCall(nextOwner, parseEther("0.001")), packedCall(safe, 0n, swapData)]);
   const data = encodeFunctionData({ abi: multiSendAbi, functionName: "multiSend", args: [batch] });
@@ -177,39 +211,29 @@ async function rotatedWrite(safe: Address, to: Address, amount: bigint): Promise
   if (rpcHash !== safeTxHash) throw new Error("Safe transaction hash verification failed.");
   const signature = await current.sign({ hash: safeTxHash });
   const { client } = sponsorClient();
-  pendingPrivateKey = next;
+  pendingPrivateKey = next; pendingSelection = selected; pendingIntent = {safe, to, amount};
   const hash = await client.writeContract({ address: safe, abi: safeAbi, functionName: "execTransaction", args: [tx.to, tx.value, tx.data, tx.operation, tx.safeTxGas, tx.baseGas, tx.gasPrice, tx.gasToken, tx.refundReceiver, signature] });
-  try {
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    if (receipt.status !== "success") throw new Error("Ethereum Sepolia transaction reverted.");
-    await reconcilePending(safe);
-    await attestSafe(safe, privateKeyToAccount(privateKey!).address, guardAddress);
-    return hash;
-  } catch (error) {
-    try {
-      await reconcilePending(safe);
-      if (!pendingPrivateKey) {
-        await attestSafe(safe, privateKeyToAccount(privateKey!).address, guardAddress);
-        return hash;
-      }
-    } catch {}
-    throw error;
-  }
+  pendingHash = hash;
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== "success") { pendingPrivateKey = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined; throw new Error("Ethereum Sepolia transaction reverted."); }
+  return (await reconcilePending(safe))!;
+  } finally { writing = false; }
 }
 
 function createEphemeralBurner(): Address {
   mnemonicSecret = undefined; ownerIndex = 0; privateKey = generatePrivateKey(); sponsorPrivateKey = privateKey;
-  pendingPrivateKey = undefined; futurePrivateKeys = []; guardAddress = undefined;
+  pendingPrivateKey = undefined; selected = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined; guardAddress = undefined;
   return privateKeyToAccount(privateKey).address;
 }
 function loadMnemonicSigner(mnemonic: string, index = 0): Address {
+  if (writing) throw new Error("A rotation is in progress.");
   mnemonicSecret = mnemonic; ownerIndex = index; privateKey = mnemonicKey(mnemonic, index); sponsorPrivateKey = privateKey;
-  pendingPrivateKey = undefined; futurePrivateKeys = [];
+  pendingPrivateKey = undefined; selected = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined;
   return privateKeyToAccount(privateKey).address;
 }
 function clearEphemeralBurner(): void {
   privateKey = undefined; sponsorPrivateKey = undefined; pendingPrivateKey = undefined; mnemonicSecret = undefined;
-  futurePrivateKeys = []; guardAddress = undefined; ownerIndex = 0;
+  selected = undefined; pendingHash = undefined; pendingSelection = undefined; pendingIntent = undefined; guardAddress = undefined; ownerIndex = 0;
 }
 function hasEphemeralBurner(): boolean { return privateKey !== undefined; }
 
@@ -243,10 +267,9 @@ async function deploySafeWallet(onSafeCreated?: (safe: Address, transactionHash:
     checkedCode(SAFE_PROXY_FACTORY, FACTORY_CODE_HASH),
     checkedCode(MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH),
   ]);
-  const guard = await deploy(bunkerGuardV3Abi, bunkerGuardV3Bytecode, [MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH]);
+  const guard = await deploy(bunkerGuardAbi, bunkerGuardBytecode, [MULTISEND_CALL_ONLY, MULTISEND_CODE_HASH]);
   const helper = await deploy(bunkerSetupAbi, bunkerSetupBytecode);
-  const owners = sequence().map(key => privateKeyToAccount(key).address) as [Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address, Address];
-  const helperData = encodeFunctionData({ abi: bunkerSetupAbi, functionName: "setup", args: [guard, owners] });
+  const helperData = encodeFunctionData({ abi: bunkerSetupAbi, functionName: "setup", args: [guard] });
   const initializer = encodeFunctionData({ abi: safeAbi, functionName: "setup", args: [[current.address], 1n, helper, helperData, ZERO, ZERO, 0n, ZERO] });
   const saltNonce = BigInt(generatePrivateKey());
   const factoryHash = await client.writeContract({ address: SAFE_PROXY_FACTORY, abi: factoryAbi, functionName: "createChainSpecificProxyWithNonce", args: [SAFE_SINGLETON, initializer, saltNonce] });
@@ -270,12 +293,12 @@ async function readSafeWalletOnce(safe: Address) {
   const discoveredGuard = storageAddress(guardSlot);
   if (owners.length !== 1 || discoveredGuard === ZERO) throw new Error("Safe verification failed.");
   const state = await publicClient.readContract({ address: discoveredGuard, abi: bunkerGuardAbi, functionName: "state", args: [safe] });
-  ownerIndex = Number(state[1]);
+  const rotationCount = Number(state[1]);
+  if (!Number.isSafeInteger(rotationCount)) throw new Error("Rotation counter exceeds browser display range.");
   guardAddress = discoveredGuard;
   await attestSafe(safe, owners[0]!, discoveredGuard);
-  const committed = await publicClient.readContract({ address: discoveredGuard, abi: bunkerGuardAbi, functionName: "committedOwner", args: [safe, BigInt(ownerIndex)] });
-  if (ownerIndex < 19 && committed === ZERO) throw new Error("Guard sequence verification failed.");
-  return { balance, owner: owners[0]!, index: ownerIndex };
+  if (!await publicClient.readContract({ address: discoveredGuard, abi: bunkerGuardAbi, functionName: "consumed", args: [safe, owners[0]!] })) throw new Error("Guard history verification failed.");
+  return { balance, owner: owners[0]!, index: rotationCount };
 }
 async function readSafeWallet(safe: Address) {
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -285,15 +308,16 @@ async function readSafeWallet(safe: Address) {
   throw new Error("Safe deployment is still confirming.");
 }
 async function verifyRecoverySequence(safe: Address): Promise<void> {
-  if (!guardAddress || !mnemonicSecret) throw new Error("Recovery sequence is unavailable.");
-  const keys = sequence();
-  const indexes = Array.from({ length: 20 - ownerIndex }, (_, offset) => ownerIndex + offset);
-  const committed = await Promise.all(indexes.map(index => publicClient.readContract({ address: guardAddress!, abi: bunkerGuardAbi, functionName: "committedOwner", args: [safe, BigInt(index)] })));
-  if (committed.some((address, offset) => address.toLowerCase() !== privateKeyToAccount(keys[indexes[offset]!]!).address.toLowerCase())) throw new Error("This recovery phrase does not match the Safe signer sequence.");
+  if (!guardAddress || !mnemonicSecret) throw new Error("Recovery signer is unavailable.");
+  await attestSafe(safe, ownerAccount().address, guardAddress);
 }
 const demoSendETH = (safe: Address, to: Address, amount: bigint) => rotatedWrite(safe, to, amount);
 
-return { clearEphemeralBurner, createEphemeralBurner, demoSendETH, deploySafeWallet, finalizeSafeWallet, hasEphemeralBurner, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence };
+const reconcilePendingTransfer = (safe: Address) => pendingIntent
+  ? rotatedWrite(safe, pendingIntent.to, pendingIntent.amount)
+  : Promise.resolve(undefined);
+
+return { reconcilePendingTransfer, getActiveMnemonic: () => mnemonicSecret, selectNextSigner, recoverSigner, clearEphemeralBurner, createEphemeralBurner, demoSendETH, deploySafeWallet, finalizeSafeWallet, hasEphemeralBurner, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence };
 }
 
 export async function readSepoliaBalance(address: Address): Promise<bigint> {

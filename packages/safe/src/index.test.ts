@@ -5,6 +5,7 @@ import { validateManifest, type DeploymentManifest } from './index';
 const address = (n: number) => toHex(n, { size: 20 });
 const manifest: DeploymentManifest = {
   chainId: 11155111,
+  guardVersion: 2,
   safeVersion: '1.4.1',
   singleton: address(2),
   proxyFactory: address(3),
@@ -52,3 +53,6 @@ test('requires exactly four named, nonzero 32-byte code hashes', () => {
   ).toThrow('hash');
   expect(() => validateManifest({ ...manifest, codeHashes: null } as never)).toThrow('hash');
 });
+
+test('rejects legacy deployment manifests', () =>
+  expect(() => validateManifest({ ...manifest, guardVersion: 1 } as never)).toThrow('V2'));

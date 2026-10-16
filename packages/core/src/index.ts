@@ -10,6 +10,8 @@ import {
   type Hex,
 } from 'viem';
 
+// Legacy commitment utilities retained for research/vector compatibility, not V2 rotation.
+export const GUARD_VERSION = 2;
 export const BATCH_SIZE = 20;
 export const RESERVED_ROTATIONS = 1;
 export const SUPPORTED_CHAIN_IDS = [31337, 11155111] as const;
@@ -158,11 +160,13 @@ export function validateTransferIntent(intent: TransferIntent): TransferIntent {
     throw new SecurityPolicyError('Alpha transfer exceeds the 10,000 ETH hard limit.');
   if (typeof intent.nonce !== 'bigint' || intent.nonce < 0n || intent.nonce >= 1n << 256n)
     throw new SecurityPolicyError('Nonce must be uint256.');
-  if (rotationsRemaining(intent.nextIndex) < 1)
-    throw new SecurityPolicyError(
-      'The final rotation is reserved; this sequence cannot send again.',
-    );
+  if (!Number.isSafeInteger(intent.nextIndex) || intent.nextIndex < 0)
+    throw new SecurityPolicyError('Invalid rotation counter.');
   if (intent.currentOwner.toLowerCase() === intent.nextOwner.toLowerCase())
     throw new SecurityPolicyError('Rotation must advance to a fresh owner.');
+  if (intent.nextOwner.toLowerCase() === intent.safe.toLowerCase())
+    throw new SecurityPolicyError('Rotation must advance to a fresh EOA.');
+  if (intent.recipient.toLowerCase() === intent.safe.toLowerCase())
+    throw new SecurityPolicyError('Recipient cannot be the Safe.');
   return intent;
 }

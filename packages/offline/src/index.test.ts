@@ -3,13 +3,13 @@ import { MAX_ENVELOPE_BYTES, parseEnvelope, sealEnvelope, serializeEnvelope } fr
 
 const zero = '0x0000000000000000000000000000000000000000' as const;
 const base = {
-  version: 1 as const,
+  version: 2 as const,
   kind: 'bunker-transfer' as const,
   chainId: 31337 as const,
   safe: '0x0000000000000000000000000000000000000002' as const,
   safeVersion: '1.4.1' as const,
   guard: '0x0000000000000000000000000000000000000003' as const,
-  guardVersion: 1 as const,
+  guardVersion: 2 as const,
   manifestId: `0x${'11'.repeat(32)}` as const,
   nonce: '0',
   to: '0x0000000000000000000000000000000000000004' as const,
@@ -23,8 +23,7 @@ const base = {
   refundReceiver: zero,
   currentOwner: '0x0000000000000000000000000000000000000005' as const,
   nextOwner: '0x0000000000000000000000000000000000000006' as const,
-  nextIndex: 1,
-  merkleProof: Array(5).fill(`0x${'22'.repeat(32)}`) as `0x${string}`[],
+  nextIndex: 25,
   safeTxHash: `0x${'33'.repeat(32)}` as const,
 };
 
@@ -70,10 +69,12 @@ describe('bounded offline envelope', () => {
       { gasToken: base.safe },
       { refundReceiver: base.safe },
       { currentOwner: base.nextOwner },
-      { nextIndex: 19 },
+      { nextIndex: -1 },
+      { nextIndex: Number.MAX_SAFE_INTEGER + 1 },
+      { version: 1 },
+      { guardVersion: 1 },
       { nextIndex: 1.5 },
-      { merkleProof: base.merkleProof.slice(1) },
-      { merkleProof: [base.merkleProof[0], ...base.merkleProof.slice(1, 4), '0x12'] },
+      { merkleProof: [] }, // Removed V1 field must not be accepted.
       { guard: zero },
       { signature: '0x12' },
     ]) {

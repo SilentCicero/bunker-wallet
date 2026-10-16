@@ -22,6 +22,7 @@ import {
   restoreUnlockedMnemonic,
 } from './unlockedSession';
 import type { Activity } from './activity';
+import { recoverWithHint, saveRecoveryHint } from './recoveryHint';
 import { HistoryEntry } from './HistoryEntry';
 import { SigningModes } from './SigningModes';
 import { experimentalEnabled } from './pq/config';
@@ -186,6 +187,10 @@ export default function App() {
             'bunker.supplies',
           ].includes(window.location.hostname)));
   const {
+    reconcilePendingTransfer,
+    getActiveMnemonic,
+    recoverSigner,
+    selectNextSigner,
     clearEphemeralBurner,
     demoSendETH,
     deploySafeWallet,
@@ -226,6 +231,61 @@ export default function App() {
     amount!: HTMLInputElement,
     walletInput!: HTMLInputElement;
   let confirmInputs: HTMLInputElement[] = [];
+  let activeDerivationIndex = 0,
+    selectedDerivationIndex: number | undefined;
+  const [cachedRecoveryAvailable, setCachedRecoveryAvailable] = createSignal(false);
+  let recoveryStart!: HTMLInputElement,
+    recoveryCount!: HTMLInputElement,
+    nextIndexInput!: HTMLInputElement,
+    nextPhraseInput!: HTMLTextAreaElement,
+    nextBackup!: HTMLInputElement;
+  let confirmedAction: { label: string; hash: `0x${string}`; amount: bigint } | undefined;
+  const finishConfirmedAction = async () => {
+    const action = confirmedAction!;
+    await afterAction(action.label, action.hash, action.amount);
+    confirmedAction = undefined;
+  };
+  const chooseNext = () => {
+    try {
+      if (busy() || confirmedAction)
+        throw new Error(
+          'Finish reconciling the previous transfer before selecting another signer.',
+        );
+      const phrase = nextPhraseInput.value.trim();
+      if (phrase && (!validMnemonic(phrase) || !nextBackup.checked))
+        throw new Error('Validate and back up the new 24-word phrase before selecting it.');
+      setNextSigner(selectNextSigner(Number(nextIndexInput.value), phrase || undefined));
+      selectedDerivationIndex = Number(nextIndexInput.value);
+      nextPhraseInput.value = '';
+      setNotice('Next signer selected locally. No on-chain change until a successful transfer.');
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : 'Selection failed.');
+    }
+  };
+
+  const RecoveryRange = () => (
+    <div>
+      <label>
+        Recovery start index
+        <input ref={recoveryStart} type="number" min="0" max="2147483647" value="0" />
+      </label>
+      <label>
+        Keys to search (1–1000)
+        <input ref={recoveryCount} type="number" min="1" max="1000" value="100" />
+      </label>
+      <p>
+        Search matches the on-chain owner, not the rotation count. If you switched seed, use that
+        seed. Increase the start index or search up to 1000 keys per attempt. Legacy V1 wallets are
+        rejected by V2 runtime attestation.
+      </p>
+      <Show when={cachedRecoveryAvailable()}>
+        <p>Your cached phrase is intact. Retry a different range without re-entering it.</p>
+        <button type="button" disabled={Boolean(busy())} onClick={() => load(true, true)}>
+          Retry cached phrase with this range
+        </button>
+      </Show>
+    </div>
+  );
   let localPreviewMnemonic: string | undefined;
   const previewOwner = (index: number) => {
     if (!localPreviewMnemonic) throw new Error('Local preview keys are unavailable.');
@@ -452,6 +512,7 @@ export default function App() {
     }
   };
   const afterAction = async (label: string, hash?: string, sentAmount?: bigint) => {
+    const g = generation;
     if (mode() === 'local') {
       const used = owner(),
         active = nextSigner(),
@@ -468,11 +529,65 @@ export default function App() {
       setNotice('Simulated locally — not broadcast. A fresh owner key is now active.');
       return;
     }
-    await refreshWallet();
+    await refreshWallet(g);
+    if (g !== generation) return;
+    const mnemonic = getActiveMnemonic();
+    if (mnemonic && mnemonic !== (await restoreUnlockedMnemonic())) {
+      if (g !== generation) return;
+      await cacheUnlockedMnemonic(mnemonic);
+      if (g !== generation) {
+        await clearUnlockedMnemonic();
+        return;
+      }
+      localStorage.removeItem('bunker-vault');
+      setSavedVault(false);
+    }
+    if (g !== generation) return;
+    if (mnemonic) {
+      const index = selectedDerivationIndex ?? activeDerivationIndex + 1;
+      saveRecoveryHint(localStorage, walletAddress()!, mnemonic, owner()!, index);
+      activeDerivationIndex = index;
+      selectedDerivationIndex = undefined;
+    }
+    setNextSigner();
     setActivity((rows) => [{ label, hash: hash!, kind: 'rotation', index: rotation() }, ...rows]);
     setNotice('Confirmed on Ethereum Sepolia. A fresh owner key is now active.');
   };
   const runETH = async () => {
+    if (busy()) return;
+    const g = generation;
+    if (confirmedAction) {
+      setBusy('Refreshing confirmed transfer…');
+      try {
+        await finishConfirmedAction();
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : 'Refresh failed.');
+      } finally {
+        if (g === generation) setBusy('');
+      }
+      return;
+    }
+    if (mode() === 'sepolia' && walletAddress()) {
+      setBusy('Reconciling pending transfer…');
+      try {
+        const result = await reconcilePendingTransfer(walletAddress()!);
+        if (g !== generation) return;
+        if (result) {
+          confirmedAction = {
+            label: `Sent ${formatEther(result.amount)} ETH to ${result.to}`,
+            hash: result.hash,
+            amount: result.amount,
+          };
+          await finishConfirmedAction();
+          return;
+        }
+      } catch (e) {
+        setNotice(e instanceof Error ? e.message : 'Reconciliation failed.');
+        return;
+      } finally {
+        if (g === generation) setBusy('');
+      }
+    }
     if (!walletAddress() || !to.value.trim() || !amount.value)
       return setNotice('Enter a valid recipient and ETH amount.');
     let value: bigint;
@@ -486,24 +601,33 @@ export default function App() {
       return setNotice('Preview balance is too low for that amount.');
     if (mode() === 'sepolia' && value + parseEther('0.001') > walletBalance())
       return setNotice('Keep 0.001 ETH in the Safe to fund the next signer.');
-    if (mode() === 'sepolia' && rotation() >= 19)
-      return setNotice('This fixed signer sequence is exhausted.');
     try {
       let recipient: Address | undefined;
       if (mode() === 'sepolia') {
         setBusy('Resolving recipient…');
         recipient = await resolveRecipient(to.value);
+        if (g !== generation) return;
       }
       setBusy('Sending ETH and rotating the owner key…');
-      await afterAction(
-        `Sent ${formatEther(value)} ETH`,
-        mode() === 'local' ? undefined : await demoSendETH(walletAddress()!, recipient!, value),
-        value,
-      );
+      const label = `Sent ${formatEther(value)} ETH`;
+      if (mode() === 'local') await afterAction(label, undefined, value);
+      else {
+        const result = await demoSendETH(walletAddress()!, recipient!, value);
+        if (g !== generation) {
+          clearEphemeralBurner();
+          return;
+        }
+        confirmedAction = {
+          label: `Sent ${formatEther(result.amount)} ETH to ${result.to}`,
+          hash: result.hash,
+          amount: result.amount,
+        };
+        await finishConfirmedAction();
+      }
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'Transfer failed.');
     } finally {
-      setBusy('');
+      if (g === generation) setBusy('');
     }
   };
   const showPhrase = (mnemonic: string) => {
@@ -968,7 +1092,7 @@ export default function App() {
         encrypted = await encryptMnemonic(mnemonic, password.value, {
           chainId: 11155111,
           derivation: "m/44'/60'/7331'/0/index",
-          sequenceVersion: 1,
+          sequenceVersion: 2,
         });
         if (g !== generation) return;
         if (
@@ -983,6 +1107,8 @@ export default function App() {
       }
       if (g !== generation) return;
       const address = loadMnemonicSigner(mnemonic);
+      activeDerivationIndex = 0;
+      selectedDerivationIndex = undefined;
       if (experimentalEnabled())
         localStorage.setItem(
           STANDARD_SETUP,
@@ -1015,7 +1141,7 @@ export default function App() {
       }
     }
   };
-  const load = async (savedOnly = false) => {
+  const load = async (savedOnly = false, useCachedPhrase = false) => {
     const g = generation;
     try {
       const entered =
@@ -1023,7 +1149,12 @@ export default function App() {
           ? ''
           : (restore?.value?.trim() ?? '');
       let mnemonic: string;
-      if (entered) {
+      if (useCachedPhrase) {
+        const cached = await restoreUnlockedMnemonic();
+        if (g !== generation) return;
+        if (!cached) throw new Error('Cached phrase is unavailable. Enter your backed-up phrase.');
+        mnemonic = cached;
+      } else if (entered) {
         if (!validMnemonic(entered)) throw new Error('Enter a valid 24-word recovery phrase.');
         mnemonic = entered;
       } else if (localStorage.getItem('bunker-vault')) {
@@ -1046,9 +1177,20 @@ export default function App() {
       if (saved) {
         const state = await readSafeWallet(saved);
         if (g !== generation) return;
-        const recovered = loadMnemonicSigner(mnemonic, state.index);
-        if (recovered.toLowerCase() !== state.owner.toLowerCase())
-          throw new Error('This recovery phrase does not control the saved wallet.');
+        activeDerivationIndex = recoverWithHint(
+          localStorage,
+          saved,
+          mnemonic,
+          state.owner,
+          recoverSigner,
+          Number(recoveryStart?.value ?? 0),
+          Number(recoveryCount?.value ?? 100),
+        );
+        selectedDerivationIndex = undefined;
+        setNextSigner();
+        confirmedAction = undefined;
+        const recovered = state.owner;
+
         await verifyRecoverySequence(saved);
         if (g !== generation) return;
         if (experimentalEnabled()) localStorage.removeItem(STANDARD_SETUP);
@@ -1061,6 +1203,7 @@ export default function App() {
           return;
         }
         setRecoverable(true);
+        localStorage.setItem('bunker-safe-wallet', saved);
         setWalletAddress(saved);
         if (currentBalance !== undefined) {
           setSetupAddress(recovered);
@@ -1080,6 +1223,8 @@ export default function App() {
         go('wallet');
       } else {
         const address = loadMnemonicSigner(mnemonic);
+        activeDerivationIndex = 0;
+        selectedDerivationIndex = undefined;
         if (
           experimentalEnabled() &&
           (readSetupJournal()?.state !== 'ready' ||
@@ -1120,9 +1265,19 @@ export default function App() {
       clearEphemeralBurner();
       return;
     }
-    const recovered = loadMnemonicSigner(mnemonic, state.index);
-    if (recovered.toLowerCase() !== state.owner.toLowerCase())
-      throw new Error('This phrase does not control the supplied Safe');
+    activeDerivationIndex = recoverWithHint(
+      localStorage,
+      safe,
+      mnemonic,
+      state.owner,
+      recoverSigner,
+      Number(recoveryStart?.value ?? 0),
+      Number(recoveryCount?.value ?? 100),
+    );
+    selectedDerivationIndex = undefined;
+    setNextSigner();
+    confirmedAction = undefined;
+    const recovered = state.owner;
     await verifyRecoverySequence(safe);
     if (g !== generation) {
       clearEphemeralBurner();
@@ -1157,7 +1312,7 @@ export default function App() {
       encrypted = await encryptMnemonic(mnemonic, browserPassword, {
         chainId: 11155111,
         derivation: "m/44'/60'/7331'/0/index",
-        sequenceVersion: 1,
+        sequenceVersion: 2,
       });
     const setupFunds = state.balance === 0n ? await readSepoliaBalance(recovered) : undefined;
     if (g !== generation) {
@@ -1294,6 +1449,8 @@ export default function App() {
       const balance = await readSepoliaBalance(address);
       if (g !== generation) return;
       loadMnemonicSigner(mnemonic);
+      activeDerivationIndex = 0;
+      selectedDerivationIndex = undefined;
       await cacheUnlockedMnemonic(mnemonic);
       if (g !== generation) {
         await clearUnlockedMnemonic();
@@ -1364,6 +1521,7 @@ export default function App() {
     try {
       await clearUnlockedMnemonic();
       if (g !== generation) return;
+      confirmedAction = undefined;
       wipe();
       setPQBootstrap();
       setChecking(false);
@@ -1404,7 +1562,17 @@ export default function App() {
               clearEphemeralBurner();
               return;
             }
-            const signer = loadMnemonicSigner(mnemonic, state.index);
+            activeDerivationIndex = recoverWithHint(
+              localStorage,
+              saved,
+              mnemonic,
+              state.owner,
+              recoverSigner,
+            );
+            selectedDerivationIndex = undefined;
+            setNextSigner();
+            confirmedAction = undefined;
+            const signer = state.owner;
             await verifyRecoverySequence(saved);
             if (g !== generation) {
               clearEphemeralBurner();
@@ -1433,6 +1601,8 @@ export default function App() {
             setView('wallet');
           } else {
             const address = loadMnemonicSigner(mnemonic);
+            activeDerivationIndex = 0;
+            selectedDerivationIndex = undefined;
             if (
               experimentalEnabled() &&
               (readSetupJournal()?.state !== 'ready' ||
@@ -1451,8 +1621,14 @@ export default function App() {
             setView('setup');
           }
           return;
-        } catch {
-          if (g === generation) await clearUnlockedMnemonic();
+        } catch (e) {
+          if (g !== generation) return;
+          clearEphemeralBurner();
+          // A bounded search miss (or an RPC failure) does not invalidate the cached seed.
+          setCachedRecoveryAvailable(true);
+          setView(experimentalEnabled() ? 'recover' : 'load');
+          setNotice(e instanceof Error ? e.message : 'Enter your phrase and recovery range.');
+          return;
         }
       }
       if (g !== generation) return;
@@ -1462,10 +1638,13 @@ export default function App() {
       ) {
         setMode('sepolia');
         setView(experimentalEnabled() && (savedVault() || savedPQ()) ? 'recover' : 'load');
-      } else if (localStorage.getItem('bunker-safe-wallet'))
+      } else if (localStorage.getItem('bunker-safe-wallet')) {
+        setMode('sepolia');
+        setView(experimentalEnabled() ? 'recover' : 'load');
         setNotice(
-          'This Safe has no encrypted browser backup and cannot be restored after refresh. Create a new recoverable wallet.',
+          'Enter your backed-up phrase and recovery range to match the current on-chain owner.',
         );
+      }
     })();
   });
   onCleanup(() => {
@@ -1765,7 +1944,7 @@ export default function App() {
                   ? experimentalEnabled()
                     ? 'Your setup key is funded. Create and fund your permanent Safe address.'
                     : 'Your setup key is funded. Create the guarded Safe and move the test ETH into its permanent address.'
-                  : 'Your temporary setup address is ready and copied when you open the faucet. The unaudited Safe supports 19 rotations and has no migration path. This unaudited public test build is restricted to Sepolia test ETH.'}
+                  : 'Your temporary setup address is ready and copied when you open the faucet. The V2 Safe selects a fresh signer on each transfer without a fixed rotation limit. Legacy fixed-sequence Safes cannot upgrade in place. This unaudited public test build is restricted to Sepolia test ETH.'}
             </p>
             <p class="signing-status">
               <strong>Standard</strong> · ECDSA only · No PQ signature
@@ -1943,6 +2122,34 @@ export default function App() {
                 </div>
               </section>
             </Show>
+            <Show when={mode() === 'sepolia'}>
+              <section class="signer-sequence">
+                <h2>Choose next signer (optional)</h2>
+                <p>
+                  Default: next local index. On-chain rotation count is not a derivation index. A
+                  compromised current signer can substitute an attacker-controlled signer; reuse
+                  prevention does not prevent substitution.
+                </p>
+                <label>
+                  Next derivation index
+                  <input ref={nextIndexInput} type="number" min="0" max="2147483647" value="1" />
+                </label>
+                <label>
+                  New recovery phrase (optional; leave blank to keep current seed)
+                  <textarea ref={nextPhraseInput} autocomplete="off" spellcheck={false} />
+                </label>
+                <label>
+                  <input ref={nextBackup} type="checkbox" /> I backed up the new phrase and index.
+                  Switching removes the old encrypted browser vault after confirmation.
+                </label>
+                <button onClick={chooseNext} disabled={Boolean(busy())}>
+                  Select next signer locally
+                </button>
+                <Show when={nextSigner()}>
+                  <code>{nextSigner()}</code>
+                </Show>
+              </section>
+            </Show>
             <div class="wallet-grid">
               <section class="actions-panel">
                 <h2>Send ETH</h2>
@@ -1958,15 +2165,8 @@ export default function App() {
                   Amount
                   <input ref={amount} value="0.0001" inputmode="decimal" placeholder="0.001" />
                 </label>
-                <button
-                  class="primary wide"
-                  onClick={runETH}
-                  disabled={Boolean(busy()) || (mode() === 'sepolia' && rotation() >= 19)}
-                >
-                  {busy() ||
-                    (mode() === 'sepolia' && rotation() >= 19
-                      ? 'Sequence exhausted'
-                      : 'Send + rotate key')}
+                <button class="primary wide" onClick={runETH} disabled={Boolean(busy())}>
+                  {busy() || 'Send + rotate key'}
                 </button>
               </section>
               <aside class="activity">
@@ -2248,7 +2448,7 @@ export default function App() {
                   <small>
                     {sepoliaEnabled
                       ? 'Encrypted recovery is required so refresh cannot lose access'
-                      : 'Unaudited · public Sepolia test build · 19 rotations'}
+                      : 'Unaudited · public Sepolia test build · dynamic rotation'}
                   </small>
                   <b>Soon</b>
                 </button>
@@ -2303,7 +2503,10 @@ export default function App() {
             />
             <span class="status-dot">Secure setup</span>
             <h1>Write down these 24 words.</h1>
-            <p>Keep them offline. They recover every owner key in sequence.</p>
+            <p>
+              Keep them offline. They recover keys derived from this phrase. A seed switch requires
+              a separate backup of the new phrase and index.
+            </p>
             <Show
               when={experimentalEnabled()}
               fallback={
@@ -2514,6 +2717,7 @@ export default function App() {
                 If a vault for this wallet is already saved here, enter its current password.
                 Otherwise choose a new password to encrypt the recovered browser wallet.
               </p>
+              <RecoveryRange />
               <button class="primary wide" disabled={Boolean(busy())} onClick={recoverWallet}>
                 {busy() || 'Recover and save wallet'}
               </button>
@@ -2557,6 +2761,7 @@ export default function App() {
                       Stable Safe address · optional
                       <input ref={walletInput} placeholder="0x… (needed on a new device)" />
                     </label>
+                    <RecoveryRange />
                     <button class="primary" onClick={() => load()}>
                       Recover with phrase
                     </button>

@@ -23,19 +23,18 @@ const KEYS = [
   'currentOwner',
   'nextOwner',
   'nextIndex',
-  'merkleProof',
   'safeTxHash',
   'signature',
   'checksum',
 ] as const;
 export type OfflineEnvelope = {
-  version: 1;
+  version: 2;
   kind: 'bunker-transfer';
-  chainId: 31337 | 11155111 | 84532 | 421614;
+  chainId: 31337 | 11155111;
   safe: Address;
   safeVersion: '1.4.1';
   guard: Address;
-  guardVersion: 1;
+  guardVersion: 2;
   manifestId: Hex;
   nonce: string;
   to: Address;
@@ -50,7 +49,6 @@ export type OfflineEnvelope = {
   currentOwner: Address;
   nextOwner: Address;
   nextIndex: number;
-  merkleProof: Hex[];
   safeTxHash: Hex;
   signature?: Hex;
   checksum: Hex;
@@ -84,10 +82,10 @@ export function validateEnvelope(input: unknown): OfflineEnvelope {
   const unknown = Object.keys(obj).filter((k) => !KEYS.includes(k as (typeof KEYS)[number]));
   if (unknown.length) throw new SecurityPolicyError('Envelope contains unknown fields.');
   if (
-    obj.version !== 1 ||
+    obj.version !== 2 ||
     obj.kind !== 'bunker-transfer' ||
     obj.safeVersion !== '1.4.1' ||
-    obj.guardVersion !== 1 ||
+    obj.guardVersion !== 2 ||
     obj.operation !== 1 ||
     obj.data !== '0x'
   )
@@ -137,16 +135,8 @@ export function validateEnvelope(input: unknown): OfflineEnvelope {
     obj.refundReceiver !== ZERO_ADDRESS
   )
     throw new SecurityPolicyError('Safe refunds are disabled.');
-  if (!Number.isInteger(obj.nextIndex) || Number(obj.nextIndex) < 0 || Number(obj.nextIndex) > 18)
-    throw new SecurityPolicyError('Rotation index is invalid or reserved.');
-  if (
-    !Array.isArray(obj.merkleProof) ||
-    obj.merkleProof.length !== 5 ||
-    obj.merkleProof.some(
-      (v) => typeof v !== 'string' || !isHex(v, { strict: true }) || v.length !== 66,
-    )
-  )
-    throw new SecurityPolicyError('Merkle proof must contain five bytes32 values.');
+  if (!Number.isSafeInteger(obj.nextIndex) || Number(obj.nextIndex) < 0)
+    throw new SecurityPolicyError('Rotation counter is invalid.');
   const { checksum: provided, ...rest } = obj;
   if (checksum(rest as Omit<OfflineEnvelope, 'checksum'>) !== provided)
     throw new SecurityPolicyError('Envelope checksum mismatch.');

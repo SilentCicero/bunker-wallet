@@ -14,7 +14,7 @@ import { sepolia } from 'viem/chains';
 import {
   bunkerGuardAbi as standardGuardABI,
   bunkerGuardRuntimeHash,
-} from '../../apps/web/src/safeArtifactsV3';
+} from '../../apps/web/src/safeArtifacts'; // Standard uses dynamic V2; PQ retains V3.
 import fixture from '../fixtures/sepolia-safe-1.4.1.json';
 
 // Transactional browser QA is disposable Anvil only. Never publish phrases or run against public Sepolia.

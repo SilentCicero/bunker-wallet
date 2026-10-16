@@ -18,6 +18,23 @@ interface Vm {
 }
 
 contract RevertingReceiver { receive() external payable { revert(); } }
+contract ReenteringReceiver {
+    address target;
+    bool public attempted;
+    bool public accepted;
+    constructor(address _target) { target = _target; }
+    receive() external payable {
+        attempted = true;
+        (accepted,) = target.call(abi.encodeWithSignature("reenterForTest()"));
+    }
+}
+contract CreatedOwner { receive() external payable {} }
+contract DeployingReceiver {
+    function candidate() external view returns(address) {
+        return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), address(this), bytes32(0), keccak256(type(CreatedOwner).creationCode))))));
+    }
+    receive() external payable { new CreatedOwner{salt: bytes32(0)}(); }
+}
 
 contract BunkerSafeIntegrationTest {
     Vm private constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
@@ -45,7 +62,7 @@ contract BunkerSafeIntegrationTest {
         }
         address[] memory owners = new address[](1);
         owners[0] = vm.addr(ownerKey);
-        bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(guard), futureOwners));
+        bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(guard)));
         bytes memory initializer = abi.encodeCall(Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0))));
         SafeProxy proxy = factory.createChainSpecificProxyWithNonce(address(singleton), initializer, 1);
         safe = Safe(payable(address(proxy)));
@@ -57,18 +74,33 @@ contract BunkerSafeIntegrationTest {
     }
 
     function _execute(uint256 signerKey, address recipient, uint256 amount, address nextOwner) private returns (bool) {
-        address current = vm.addr(signerKey);
-        bytes memory swapData = abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, current, nextOwner);
+        return _executeAtNonce(signerKey, recipient, amount, nextOwner, safe.nonce());
+    }
+
+    function _executeAtNonce(uint256 signerKey, address recipient, uint256 amount, address nextOwner, uint256 nonce) private returns (bool) {
+        bytes memory data;
+        {
+        bytes memory swapData = abi.encodeWithSignature("swapOwner(address,address,address)", SENTINEL, vm.addr(signerKey), nextOwner);
         bytes memory transactions = bytes.concat(
             _packedCall(recipient, amount, ""),
             _packedCall(nextOwner, 0.001 ether, ""),
             _packedCall(address(safe), 0, swapData)
         );
-        bytes memory data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
-        uint256 nonce = safe.nonce();
+        data = abi.encodeCall(MultiSendCallOnly.multiSend, transactions);
+        }
         bytes32 txHash = safe.getTransactionHash(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), nonce);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, txHash);
         return safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
+    }
+
+    function testDynamicTwentyFiveRotations() public {
+        uint256 signer = ownerKey;
+        for (uint256 i; i < 25; ++i) {
+            uint256 nextKey = 9000 + i;
+            require(_execute(signer, vm.addr(777), 0.01 ether, vm.addr(nextKey)), "dynamic rotation");
+            require(guard.consumed(address(safe), vm.addr(signer)), "history missing");
+            signer = nextKey;
+        }
     }
 
     function testRejectsUnpinnedMultiSendCodeHash() public {
@@ -76,16 +108,9 @@ contract BunkerSafeIntegrationTest {
         new BunkerRotationGuard(address(multiSend), bytes32(uint256(1)));
     }
 
-    function testRejectsSentinelFutureOwnerDuringAtomicSetup() public {
-        BunkerRotationGuard secondGuard = new BunkerRotationGuard(address(multiSend), address(multiSend).codehash);
-        address[20] memory invalidOwners = futureOwners;
-        invalidOwners[3] = SENTINEL;
-        address[] memory owners = new address[](1);
-        owners[0] = vm.addr(ownerKey);
-        bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(secondGuard), invalidOwners));
-        bytes memory initializer = abi.encodeCall(Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0))));
+    function testRejectsSentinelNextOwner() public {
         vm.expectRevert();
-        factory.createChainSpecificProxyWithNonce(address(singleton), initializer, 2);
+        this.executeForTest(ownerKey, vm.addr(777), 1 ether, SENTINEL);
     }
 
     function executeForTest(uint256 signerKey, address recipient, uint256 amount, address nextOwner) external returns (bool) {
@@ -99,16 +124,21 @@ contract BunkerSafeIntegrationTest {
         require(!ok, "recipient failure accepted");
         address[] memory owners = safe.getOwners();
         require(owners.length == 1 && owners[0] == vm.addr(ownerKey), "owner changed");
-        (, uint8 nextIndex,, bool executing) = guard.state(address(safe));
+        (, uint256 nextIndex,, bool executing) = guard.state(address(safe));
         require(nextIndex == 0 && !executing, "guard changed");
+        require(safe.nonce() == 0, "nonce changed");
+        require(address(safe).balance == 100 ether && address(recipient).balance == 0, "ETH changed");
+        require(futureOwners[0].balance == 0 && !guard.consumed(address(safe), futureOwners[0]), "candidate consumed or funded");
+        require(guard.consumed(address(safe), vm.addr(ownerKey)), "initial owner history lost");
+        require(_execute(ownerKey, vm.addr(777), 1 ether, futureOwners[0]), "retry failed");
     }
 
     function testAtomicSetupAndCanonicalPaddedRotation() public {
         address recipient = vm.addr(777);
         address[] memory owners = safe.getOwners();
         require(owners.length == 1 && owners[0] == vm.addr(ownerKey), "initial owner");
-        (bytes32 root, uint8 nextIndex, bool initialized, bool executing) = guard.state(address(safe));
-        require(root != bytes32(0) && nextIndex == 0 && initialized && !executing, "guard initialization");
+        (address pending, uint256 nextIndex, bool initialized, bool executing) = guard.state(address(safe));
+        require(pending == address(0) && nextIndex == 0 && initialized && !executing, "guard initialization");
         require(_execute(ownerKey, recipient, 1 ether, futureOwners[0]), "execution");
         require(recipient.balance == 1 ether, "recipient amount");
         require(futureOwners[0].balance == 0.001 ether, "next owner gas");
@@ -116,6 +146,28 @@ contract BunkerSafeIntegrationTest {
         require(owners.length == 1 && owners[0] == futureOwners[0], "rotated owner");
         (, nextIndex,, executing) = guard.state(address(safe));
         require(nextIndex == 1 && !executing, "guard index");
+    }
+
+    function reenterForTest() external {
+        require(_execute(ownerKey, vm.addr(777), 0.01 ether, vm.addr(9900)), "nested execution");
+    }
+
+    function testRecipientCannotReenterWithValidCurrentSignature() public {
+        ReenteringReceiver receiver = new ReenteringReceiver(address(this));
+        require(_execute(ownerKey, address(receiver), 1 ether, vm.addr(9901)), "outer execution");
+        require(receiver.attempted() && !receiver.accepted(), "reentrancy accepted");
+        require(!guard.consumed(address(safe), vm.addr(9900)), "nested candidate consumed");
+        (,uint256 count,,bool executing) = guard.state(address(safe));
+        require(count == 1 && !executing && safe.nonce() == 1, "state");
+    }
+
+    function testRejectsOwnerCodeCreatedDuringTransfer() public {
+        DeployingReceiver receiver = new DeployingReceiver();
+        address candidate = receiver.candidate();
+        (bool ok,) = address(this).call(abi.encodeCall(this.executeForTest, (ownerKey, address(receiver), 1 ether, candidate)));
+        require(!ok, "contract owner installed during transfer");
+        require(candidate.code.length == 0 && !guard.consumed(address(safe), candidate), "deployment did not roll back");
+        require(safe.nonce() == 0 && address(safe).balance == 100 ether, "transaction did not roll back");
     }
 
     function testRejectsMissingNextOwnerFunding() public {
@@ -144,16 +196,36 @@ contract BunkerSafeIntegrationTest {
         safe.execTransaction(address(multiSend), 0, data, Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), abi.encodePacked(r, s, v));
     }
 
-    function testSequenceExhaustionIsExplicit() public {
-        address recipient = vm.addr(780);
+    function executeAtNonceForTest(uint256 signer, address candidate, uint256 nonce) external returns(bool) {
+        require(msg.sender == address(this), "self only");
+        return _executeAtNonce(signer, vm.addr(777), 0.01 ether, candidate, nonce);
+    }
+
+    function testSimultaneousPendingRotationsOnlyOneCanWin() public {
+        uint256 pendingNonce = safe.nonce();
+        address winner = vm.addr(9001);
+        address loser = vm.addr(9002);
+        require(_executeAtNonce(ownerKey, vm.addr(777), 0.01 ether, winner, pendingNonce), "winner");
+        (bool ok,) = address(this).call(abi.encodeCall(this.executeAtNonceForTest, (ownerKey, loser, pendingNonce)));
+        require(!ok, "stale pending accepted");
+        require(guard.consumed(address(safe), winner) && !guard.consumed(address(safe), loser), "consumption");
+        require(safe.getOwners()[0] == winner && safe.nonce() == 1, "state");
+        (,uint256 count,,) = guard.state(address(safe)); require(count == 1, "counter");
+        require(_execute(9001, vm.addr(777), 0.01 ether, loser), "loser candidate should remain available");
+    }
+
+    function testAllHistoricalOwnersRejectedIncludingInitial() public {
         uint256 signer = ownerKey;
-        for (uint256 i; i < 19; ++i) {
-            require(_execute(signer, recipient, 0.01 ether, futureOwners[i]), "rotation");
-            signer = futureKeys[i];
+        for (uint256 i; i < 25; ++i) {
+            require(_execute(signer, vm.addr(780), 0.01 ether, vm.addr(9000+i)), "rotation");
+            signer = 9000+i;
         }
-        require(guard.rotationsRemaining(address(safe)) == 0, "remaining");
-        vm.prank(address(safe));
-        vm.expectRevert();
-        guard.checkTransaction(address(multiSend), 0, "", Enum.Operation.DelegateCall, 0, 0, 0, address(0), payable(address(0)), new bytes(65), address(this));
+        for (uint256 i; i <= 25; ++i) {
+            address historical = i == 0 ? vm.addr(ownerKey) : vm.addr(8999+i);
+            (bool ok,) = address(this).call(abi.encodeCall(this.executeForTest, (signer, vm.addr(780), 1 ether, historical)));
+            require(!ok, "historical reuse");
+        }
+        (,uint256 count,,) = guard.state(address(safe));
+        require(count == 25, "counter");
     }
 }

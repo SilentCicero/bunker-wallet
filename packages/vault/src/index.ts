@@ -11,7 +11,7 @@ export type VaultMetadata = {
   chainId: 31337 | 11155111 | 84532 | 421614;
   safe?: `0x${string}`;
   derivation: "m/44'/60'/7331'/0/index";
-  sequenceVersion: 1;
+  sequenceVersion: 1 | 2;
   experimental?: {
     mode: 'c10' | 'mldsa44';
     derivationVersion: 1;
@@ -49,7 +49,7 @@ function validateMetadata(metadata: VaultMetadata) {
     Array.isArray(metadata) ||
     ![31337, 11155111, 84532, 421614].includes(metadata.chainId) ||
     metadata.derivation !== "m/44'/60'/7331'/0/index" ||
-    metadata.sequenceVersion !== 1 ||
+    ![1, 2].includes(metadata.sequenceVersion) ||
     (metadata.safe !== undefined &&
       (!isAddress(metadata.safe, { strict: true }) || BigInt(metadata.safe) <= 1n))
   ) {

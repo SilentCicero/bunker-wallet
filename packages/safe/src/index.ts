@@ -3,6 +3,7 @@ import { SecurityPolicyError, assertSupportedChain, ZERO_ADDRESS } from '@bunker
 
 export type DeploymentManifest = {
   chainId: number;
+  guardVersion: 2;
   safeVersion: '1.4.1';
   singleton: Address;
   proxyFactory: Address;
@@ -14,6 +15,8 @@ export type DeploymentManifest = {
 export function validateManifest(m: DeploymentManifest) {
   if (!m || typeof m !== 'object') throw new SecurityPolicyError('Deployment manifest is invalid.');
   assertSupportedChain(m.chainId);
+  if (m.guardVersion !== 2)
+    throw new SecurityPolicyError('Only V2 dynamic guard manifests are supported.');
   if (m.safeVersion !== '1.4.1') throw new SecurityPolicyError('Unsupported Safe version.');
   for (const a of [m.singleton, m.proxyFactory, m.multiSendCallOnly, m.guard]) {
     if (!isAddress(a, { strict: true }) || a === ZERO_ADDRESS) {

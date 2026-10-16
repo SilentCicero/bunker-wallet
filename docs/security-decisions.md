@@ -3,7 +3,7 @@
 | Decision | Alpha behavior | Reason |
 |---|---|---|
 | Mainnet | Rejected in pure policy and hidden from UI | External audit is mandatory. |
-| Owner sequence | Fixed 20-address batch; last transition reserved | Dynamic refill authorization is unresolved and exhaustion can lock funds. |
+| Dynamic V2 owner | Current signer chooses one fresh next EOA; all prior owners, including the initial owner, stay consumed | Eliminates fixed batch exhaustion; intentionally does NOT prevent a compromised current signer substituting an attacker owner. |
 | Execution | ETH transfer plus one exact `swapOwner` only | Reduces privileged-call and persistent-authority surface. |
 | Refund fields | All zero | Safe refund economics are an additional value-transfer channel. |
 | Modules and fallback | No modules; fallback must be absent | Module execution can bypass transaction guards. |

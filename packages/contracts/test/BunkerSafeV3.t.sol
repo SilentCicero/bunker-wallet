@@ -7,7 +7,7 @@ import {SafeProxyFactory} from "@safe-global/safe-contracts/contracts/proxies/Sa
 import {MultiSendCallOnly} from "@safe-global/safe-contracts/contracts/libraries/MultiSendCallOnly.sol";
 import {Enum} from "@safe-global/safe-contracts/contracts/common/Enum.sol";
 import {BunkerRotationGuardV3} from "../src/BunkerRotationGuardV3.sol";
-import {BunkerSafeSetup} from "../src/BunkerSafeSetup.sol";
+import {BunkerSafeSetupV3} from "../src/BunkerSafeSetupV3.sol";
 
 interface Vm {
     function addr(uint256 privateKey) external returns (address);
@@ -44,7 +44,7 @@ contract BunkerSafeV3Test {
     SafeProxyFactory private factory;
     MultiSendCallOnly private multiSend;
     BunkerRotationGuardV3 private guard;
-    BunkerSafeSetup private helper;
+    BunkerSafeSetupV3 private helper;
     Safe private safe;
     uint256 private ownerKey = 0xA11CE;
     uint256[20] private futureKeys;
@@ -55,14 +55,14 @@ contract BunkerSafeV3Test {
         factory = new SafeProxyFactory();
         multiSend = new MultiSendCallOnly();
         guard = new BunkerRotationGuardV3(address(multiSend), address(multiSend).codehash);
-        helper = new BunkerSafeSetup();
+        helper = new BunkerSafeSetupV3();
         for (uint256 i; i < 20; ++i) {
             futureKeys[i] = 1000 + i;
             futureOwners[i] = vm.addr(futureKeys[i]);
         }
         address[] memory owners = new address[](1);
         owners[0] = vm.addr(ownerKey);
-        bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(guard), futureOwners));
+        bytes memory helperData = abi.encodeCall(BunkerSafeSetupV3.setup, (address(guard), futureOwners));
         bytes memory initializer = abi.encodeCall(
             Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0)))
         );
@@ -115,7 +115,7 @@ contract BunkerSafeV3Test {
         invalidOwners[3] = SENTINEL;
         address[] memory owners = new address[](1);
         owners[0] = vm.addr(ownerKey);
-        bytes memory helperData = abi.encodeCall(BunkerSafeSetup.setup, (address(secondGuard), invalidOwners));
+        bytes memory helperData = abi.encodeCall(BunkerSafeSetupV3.setup, (address(secondGuard), invalidOwners));
         bytes memory initializer = abi.encodeCall(
             Safe.setup, (owners, 1, address(helper), helperData, address(0), address(0), 0, payable(address(0)))
         );

@@ -107,6 +107,15 @@ describe('encrypted vault integrity', () => {
     }
   });
 
+  test('dynamic V2 metadata round trips and stays authenticated', async () => {
+    const phrase = newMnemonic();
+    const vault = await encryptMnemonic(phrase, password, { ...metadata, sequenceVersion: 2 });
+    expect(await decryptMnemonic(vault, password)).toBe(phrase);
+    await expect(
+      decryptMnemonic({ ...vault, metadata: { ...vault.metadata, sequenceVersion: 1 } }, password),
+    ).rejects.toThrow();
+  });
+
   test('rejects invalid passwords and metadata on creation', async () => {
     const phrase = newMnemonic();
     for (const invalid of ['short', 'x'.repeat(257)]) {
@@ -116,7 +125,7 @@ describe('encrypted vault integrity', () => {
       { chainId: 1 },
       { chainId: '31337' },
       { derivation: "m/44'/60'/7331'/0/0" },
-      { sequenceVersion: 2 },
+      { sequenceVersion: 3 },
       { safe: '0xinvalid' },
       {
         experimental: {

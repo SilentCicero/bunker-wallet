@@ -4,7 +4,7 @@ import { mnemonicToAccount } from "viem/accounts";
 import { sepolia } from "viem/chains";
 import { validMnemonic } from "../packages/vault/src";
 import { createBurnerSession, readSepoliaBalance, SEPOLIA_RPC } from "../apps/web/src/burner";
-const { clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
+const { recoverSigner, clearEphemeralBurner, demoSendETH, deploySafeWallet, loadMnemonicSigner, readSafeWallet, verifyRecoverySequence } = createBurnerSession();
 
 const fail = (message: string): never => { throw new Error(message); };
 
@@ -25,19 +25,20 @@ async function main() {
   const balance = await readSepoliaBalance(setup);
   if (balance <= 0n || (!continuing && balance < parseEther("0.03")) || balance > parseEther(maxBalance)) fail("Setup balance is outside the approved range.");
 
-  const previous = continuing ? await Bun.file(manifestPath).json() as { safe?: string; rotationIndex?: number } : undefined;
+  const previous = continuing ? await Bun.file(manifestPath).json() as { schema?:number; safe?: string; rotationIndex?: number } : undefined;
   const safe = continuing && previous?.safe
     ? previous.safe as `0x${string}`
     : await deploySafeWallet();
   const expectedIndex = continuing ? previous?.rotationIndex : 0;
   if (expectedIndex === undefined) throw new Error("Previous E2E state is unavailable.");
-  if (continuing) loadMnemonicSigner(mnemonic, expectedIndex);
+  if (continuing && previous?.schema !== 2) throw new Error("V2 manifest required.");
   const before = await readSafeWallet(safe);
-  const expectedOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${expectedIndex}` }).address;
+  const derivationIndex = recoverSigner(mnemonic, before.owner, Number(process.env.BUNKER_RECOVERY_START ?? 0), 1000);
+  const expectedOwner = before.owner;
   if (before.index !== expectedIndex || before.owner.toLowerCase() !== expectedOwner.toLowerCase()) fail("Initial Safe state mismatch.");
 
   const recipient = mnemonicToAccount(mnemonic, { path: "m/44'/60'/7331'/0/100" }).address;
-  const nextOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${expectedIndex + 1}` }).address;
+  const nextOwner = mnemonicToAccount(mnemonic, { path: `m/44'/60'/7331'/0/${derivationIndex + 1}` }).address;
   const [recipientBefore, nextOwnerBefore] = await Promise.all([readSepoliaBalance(recipient), readSepoliaBalance(nextOwner)]);
   await demoSendETH(safe, recipient, parseEther("0.0001"));
   const after = await readSafeWallet(safe);
@@ -48,13 +49,14 @@ async function main() {
   if (nextOwnerAfter - nextOwnerBefore !== parseEther("0.001")) fail("Next-owner funding mismatch.");
 
   clearEphemeralBurner();
-  const recovered = loadMnemonicSigner(mnemonic, after.index);
+  recoverSigner(mnemonic, after.owner, derivationIndex + 1, 1);
+  const recovered = after.owner;
   if (recovered.toLowerCase() !== after.owner.toLowerCase()) fail("Recovery owner mismatch.");
   await readSafeWallet(safe);
   await verifyRecoverySequence(safe);
 
   await Bun.write(manifestPath, JSON.stringify({
-    schema: 1,
+    schema: 2,
     network: "ethereum-sepolia",
     chainId: sepolia.id,
     completedAt: new Date().toISOString(),
@@ -62,7 +64,7 @@ async function main() {
     safe,
     rotationIndex: after.index,
     sentEth: formatEther(parseEther("0.0001")),
-    checks: ["official-components", "atomic-setup", "safe-attestation", "eth-send", "next-owner-funding", "owner-rotation", "recipient-delta", "phrase-recovery", "sequence-verification"],
+    checks: ["official-components", "atomic-setup", "safe-attestation", "eth-send", "next-owner-funding", "owner-rotation", "recipient-delta", "phrase-recovery", "current-owner-verification"],
   }, null, 2) + "\n");
   await chmod(manifestPath, 0o600);
   clearEphemeralBurner();

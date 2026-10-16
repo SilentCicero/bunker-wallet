@@ -3,13 +3,13 @@ import { sealEnvelope, serializeEnvelope } from '@bunker/offline';
 
 const zero = '0x0000000000000000000000000000000000000000' as const;
 const envelope = sealEnvelope({
-  version: 1,
+  version: 2,
   kind: 'bunker-transfer',
   chainId: 31337,
   safe: '0x0000000000000000000000000000000000000002',
   safeVersion: '1.4.1',
   guard: '0x0000000000000000000000000000000000000003',
-  guardVersion: 1,
+  guardVersion: 2,
   manifestId: `0x${'11'.repeat(32)}`,
   nonce: '0',
   to: '0x0000000000000000000000000000000000000004',
@@ -24,7 +24,6 @@ const envelope = sealEnvelope({
   currentOwner: '0x0000000000000000000000000000000000000005',
   nextOwner: '0x0000000000000000000000000000000000000006',
   nextIndex: 1,
-  merkleProof: Array(5).fill(`0x${'22'.repeat(32)}`) as `0x${string}`[],
   safeTxHash: `0x${'33'.repeat(32)}`,
 });
 
@@ -63,7 +62,7 @@ test('loopback relayer only validates bounded envelopes and never broadcasts', a
     expect(await health.json()).toMatchObject({ mode: 'validation-only', broadcast: false });
     expect(health.headers.get('cache-control')).toBe('no-store');
     expect((await fetch(`${url}/missing`)).status).toBe(404);
-    const submit = (body: string) => fetch(`${url}/v1/validate`, { method: 'POST', body });
+    const submit = (body: string) => fetch(`${url}/v2/validate`, { method: 'POST', body });
     expect((await submit('{')).status).toBe(422);
     expect((await submit('x'.repeat(65537))).status).toBe(413);
     const accepted = await submit(serializeEnvelope(envelope));
